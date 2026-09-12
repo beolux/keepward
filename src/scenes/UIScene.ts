@@ -31,6 +31,10 @@ export class UIScene extends Phaser.Scene {
   private muteBtn!: Phaser.GameObjects.Rectangle;
   private muteLabel!: Phaser.GameObjects.Text;
   private panel?: Phaser.GameObjects.Container;
+  /** Avoid destroy+rebuild every HUD tick (Safari input death) */
+  private sheetKey = '';
+  private startWaveArmed = false;
+  private trayInteractive = new Map<string, boolean>();
   private channelBar!: Phaser.GameObjects.Graphics;
   private tipText!: Phaser.GameObjects.Text;
   private dockDragId: TowerId | null = null;
@@ -205,13 +209,18 @@ export class UIScene extends Phaser.Scene {
       .setDepth(131)
       .setVisible(false);
     this.startWaveBtn.on('pointerdown', () => {
+      this.startWaveArmed = true;
       this.startWaveBtn.setScale(0.96);
     });
     this.startWaveBtn.on('pointerout', () => {
+      this.startWaveArmed = false;
       this.startWaveBtn.setScale(1);
     });
     this.startWaveBtn.on('pointerup', () => {
       this.startWaveBtn.setScale(1);
+      // Ignore release-over after dock-drag (iOS lifts onto Start Wave)
+      if (!this.startWaveArmed) return;
+      this.startWaveArmed = false;
       audio.unlock();
       this.gameScene.startWaveNow();
     });
@@ -232,6 +241,9 @@ export class UIScene extends Phaser.Scene {
     // Global pointer for dock-drag continuation into game world
     this.input.on('pointermove', this.onGlobalMove, this);
     this.input.on('pointerup', this.onGlobalUp, this);
+    // iOS Safari often sends pointercancel / lost pointer instead of up
+    this.input.on('pointerupoutside', this.onGlobalUp, this);
+    this.input.on('gameout', this.onGlobalCancel, this);
 
     this.game.events.on('keepward-hud', this.refresh, this);
     this.game.events.on('keepward-toast', this.showToast, this);
@@ -240,6 +252,8 @@ export class UIScene extends Phaser.Scene {
       this.game.events.off('keepward-toast', this.showToast, this);
       this.input.off('pointermove', this.onGlobalMove, this);
       this.input.off('pointerup', this.onGlobalUp, this);
+      this.input.off('pointerupoutside', this.onGlobalUp, this);
+      this.input.off('gameout', this.onGlobalCancel, this);
     });
 
     this.refresh(this.gameScene.getHudState());
@@ -292,17 +306,33 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.updateDockPlace(ptr.x, ptr.y);
   };
 
-  private onGlobalUp = (ptr: Phaser.Input.Pointer): void => {
-    if (!this.dockDragId) return;
-    const id = this.dockDragId;
-    this.dockDragId = null;
+  private clearDockPress(id: string): void {
     for (const btn of this.trayBtns) {
       if (btn.id === id) {
         btn.pressed = false;
         btn.bg.setScale(1);
       }
     }
+  }
+
+  private onGlobalUp = (ptr: Phaser.Input.Pointer): void => {
+    if (!this.dockDragId) return;
+    const id = this.dockDragId;
+    this.dockDragId = null;
+    this.clearDockPress(id);
     this.gameScene.endDockPlace(ptr.x, ptr.y);
+  };
+
+  /** touchcancel / finger left canvas — must release drag or input stays dead */
+  private onGlobalCancel = (): void => {
+    if (!this.dockDragId) {
+      this.gameScene.cancelDockDrag();
+      return;
+    }
+    const id = this.dockDragId;
+    this.dockDragId = null;
+    this.clearDockPress(id);
+    this.gameScene.cancelDockDrag();
   };
 
   private showToast = (msg: string): void => {
@@ -346,9 +376,11 @@ export class UIScene extends Phaser.Scene {
       btn.bg.setAlpha(unlocked ? 1 : 0.35);
       btn.label.setAlpha(unlocked ? 1 : 0.35);
       btn.cost.setColor(canAfford && unlocked ? '#C4A35A' : '#8B3A3A');
-      btn.bg.disableInteractive();
-      if (unlocked && state.status === 'playing' && !state.paused) {
-        btn.bg.setInteractive({ useHandCursor: true });
+      const wantInteractive = unlocked && state.status === 'playing' && !state.paused;
+      if (this.trayInteractive.get(btn.id) !== wantInteractive) {
+        this.trayInteractive.set(btn.id, wantInteractive);
+        if (wantInteractive) btn.bg.setInteractive({ useHandCursor: true });
+        else btn.bg.disableInteractive();
       }
     }
 
@@ -428,13 +460,43 @@ export class UIScene extends Phaser.Scene {
 
   /** Thumb HUD: selected-tower bottom sheet — Upgrade + Sell/Undo */
   private updateBottomSheet(state: GameHudState): void {
+    if (!state.selectedPlaced) {
+      if (this.panel) {
+        const dead = this.panel;
+        this.panel = undefined;
+        this.sheetKey = '';
+        // Defer destroy so we never rip interactives mid-pointer dispatch (iOS)
+        this.time.delayedCall(0, () => {
+          if (dead.active) dead.destroy(true);
+        });
+      }
+      return;
+    }
+
+    const sp = state.selectedPlaced;
+    const key = [
+      sp.id,
+      sp.kills,
+      sp.ranks.rof,
+      sp.ranks.range,
+      sp.ranks.damage,
+      sp.can.rof ? 1 : 0,
+      sp.can.range ? 1 : 0,
+      sp.can.damage ? 1 : 0,
+      sp.canUndo ? 1 : 0,
+      sp.sellWood,
+      sp.sellGold,
+      sp.costs.rof?.wood ?? -1,
+      sp.costs.range?.wood ?? -1,
+      sp.costs.damage?.wood ?? -1,
+    ].join('|');
+    if (this.panel && key === this.sheetKey) return;
+    this.sheetKey = key;
     if (this.panel) {
       this.panel.destroy(true);
       this.panel = undefined;
     }
-    if (!state.selectedPlaced) return;
 
-    const sp = state.selectedPlaced;
     // Sit above dock tray for thumb reach
     const c = this.add.container(GAME_W / 2, GAME_H - 168).setDepth(150);
     const bg = this.add
@@ -517,8 +579,11 @@ export class UIScene extends Phaser.Scene {
   private updateTeach(state: GameHudState): void {
     if (!state.teach) {
       if (this.teachOverlay) {
-        this.teachOverlay.destroy(true);
+        const dead = this.teachOverlay;
         this.teachOverlay = undefined;
+        this.time.delayedCall(0, () => {
+          if (dead.active) dead.destroy(true);
+        });
       }
       return;
     }

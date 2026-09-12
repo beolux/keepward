@@ -102,6 +102,8 @@ export class GameScene extends Phaser.Scene {
   private keepHpVisibleUntil = 0;
   private pointerDown = false;
   private dockDragging = false;
+  /** Ignore tower taps right after place (same touch / iOS synthetic click) */
+  private placeTapIgnoreUntil = 0;
   private teachMsg: string | null = null;
   private taught = false;
 
@@ -192,6 +194,8 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+    this.input.on('pointerupoutside', this.onPointerUp, this);
+    this.input.on('gameout', this.onPointerCancel, this);
 
     for (const seg of this.fort.segments.values()) {
       seg.hitZone.on('pointerup', () => this.onWallTap(seg.dir));
@@ -208,6 +212,8 @@ export class GameScene extends Phaser.Scene {
       this.input.off('pointerdown', this.onPointerDown, this);
       this.input.off('pointermove', this.onPointerMove, this);
       this.input.off('pointerup', this.onPointerUp, this);
+      this.input.off('pointerupoutside', this.onPointerUp, this);
+      this.input.off('gameout', this.onPointerCancel, this);
       this.hideIncomingTell();
       this.ghost.destroy();
       this.fx.destroy();
@@ -236,7 +242,15 @@ export class GameScene extends Phaser.Scene {
 
   private completeTeach(): void {
     if (!this.teachMsg) return;
-    this.skipTeach();
+    this.teachMsg = null;
+    this.taught = true;
+    try {
+      localStorage.setItem(TEACH_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    // HUD emit deferred to caller (tryPlace) so teach overlay isn't
+    // destroyed synchronously inside the placing pointerup.
   }
 
   private drawKeepHp(): void {
@@ -313,6 +327,16 @@ export class GameScene extends Phaser.Scene {
     this.pointerDown = false;
     this.emitHud();
   }
+
+  /** UIScene calls this on touchcancel / gameout so drag never sticks */
+  cancelDockDrag(): void {
+    if (!this.placing && !this.dockDragging && !this.pointerDown) return;
+    this.cancelPlace();
+  }
+
+  private onPointerCancel = (): void => {
+    if (this.dockDragging || this.placing || this.pointerDown) this.cancelPlace();
+  };
 
   private onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     audio.unlock();
@@ -391,7 +415,13 @@ export class GameScene extends Phaser.Scene {
     this.wood -= def.costWood;
     this.gold -= def.costGold;
     const tower = new TowerUnit(this, x, y, this.selectedTower);
-    tower.setTapHandler(() => this.selectPlacedTower(tower));
+    // Do not attach tap handler until after this gesture ends — iOS often
+    // delivers the same touchend / a synthetic click onto the new hitZone.
+    this.placeTapIgnoreUntil = this.time.now + 400;
+    this.time.delayedCall(350, () => {
+      if (!tower.active) return;
+      tower.setTapHandler(() => this.selectPlacedTower(tower));
+    });
     tower.showRange(true);
     this.time.delayedCall(500, () => {
       if (this.selectedPlaced !== tower) tower.showRange(false);
@@ -407,7 +437,8 @@ export class GameScene extends Phaser.Scene {
 
   selectPlacedTower(tower: TowerUnit): void {
     if (tower.towerId === 'keep') return;
-    if (this.placing) return;
+    if (this.placing || this.dockDragging) return;
+    if (this.time.now < this.placeTapIgnoreUntil) return;
     audio.unlock();
     for (const t of this.towers) t.showRange(false);
     this.selectedPlaced = tower;
@@ -841,7 +872,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const hudInterval = this.betweenWaves ? 100 : 250;
+    // Whole-second countdown — 250ms is enough; 100ms + sheet rebuild killed iOS
+    const hudInterval = 250;
     if (Math.floor(_time / hudInterval) !== Math.floor((_time - delta) / hudInterval)) {
       this.emitHud();
     }

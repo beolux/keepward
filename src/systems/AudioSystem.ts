@@ -31,20 +31,27 @@ export class AudioSystem {
     }
   }
 
-  /** Call from first user gesture */
+  /** Call from first user gesture — never block the JS thread on iOS */
   unlock(): void {
     if (this.unlocked) return;
-    const AC =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return;
-    this.ctx = new AC();
-    this.master = this.ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.35;
-    this.master.connect(this.ctx.destination);
-    this.unlocked = true;
-    void this.ctx.resume();
-    this.splash();
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.muted ? 0 : 0.35;
+      this.master.connect(this.ctx.destination);
+      this.unlocked = true;
+      // Fire-and-forget; awaiting resume can hang Safari if called oddly
+      void this.ctx.resume().catch(() => undefined);
+      this.splash();
+    } catch {
+      this.unlocked = false;
+      this.ctx = null;
+      this.master = null;
+    }
   }
 
   setMuted(m: boolean): void {
@@ -126,7 +133,15 @@ export class AudioSystem {
   }
 
   play(id: Stinger): void {
-    if (!this.unlocked) return;
+    if (!this.unlocked || this.muted) return;
+    try {
+      this.playInner(id);
+    } catch {
+      /* Safari can throw on suspended ctx — never break the game loop */
+    }
+  }
+
+  private playInner(id: Stinger): void {
     switch (id) {
       case 'place':
         this.tone(392, 0.08, 'square', 0.12);
