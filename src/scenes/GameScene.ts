@@ -10,8 +10,14 @@ import { EnemyUnit } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
 import { Pool } from '../utils/pool';
 import { FortSystem } from '../systems/FortSystem';
+import { FxSystem } from '../systems/FxSystem';
+import { audio } from '../systems/AudioSystem';
 import type { EnemyId } from '../data/enemies';
 import type { WallDir } from '../data/fort';
+import { HUD_TOP, HUD_BOTTOM } from '../data/map';
+
+const UNDO_MS = 6000;
+const TEACH_KEY = 'keepward-taught-v1';
 
 export type GameHudState = {
   wood: number;
@@ -41,8 +47,13 @@ export type GameHudState = {
     ranks: Record<UpgradeTrack, number>;
     can: Record<UpgradeTrack, boolean>;
     costs: Record<UpgradeTrack, { wood: number; gold: number } | null>;
+    canUndo: boolean;
+    sellWood: number;
+    sellGold: number;
   } | null;
   wallUpgradeAvailable: 'hardenedTimbers' | 'stoneFacing' | null;
+  muted: boolean;
+  teach: string | null;
 };
 
 export class GameScene extends Phaser.Scene {
@@ -57,6 +68,7 @@ export class GameScene extends Phaser.Scene {
   layoutId: LayoutId = 'square';
 
   private fort!: FortSystem;
+  private fx!: FxSystem;
   private towers: TowerUnit[] = [];
   private keepTower!: TowerUnit;
   private enemies: EnemyUnit[] = [];
@@ -66,6 +78,7 @@ export class GameScene extends Phaser.Scene {
   private ghost!: PlacementGhost;
   private placing = false;
   private selectedPlaced: TowerUnit | null = null;
+  private lastPlaced: TowerUnit | null = null;
 
   private spawning = false;
   private spawnQueue: { enemy: EnemyId; at: number; elite?: boolean; edge: 'N' | 'E' | 'S' | 'W' }[] = [];
@@ -80,7 +93,11 @@ export class GameScene extends Phaser.Scene {
 
   private keepHpBar!: Phaser.GameObjects.Graphics;
   private keepHpLabel!: Phaser.GameObjects.Text;
+  private keepHpVisibleUntil = 0;
   private pointerDown = false;
+  private dockDragging = false;
+  private teachMsg: string | null = null;
+  private taught = false;
 
   constructor() {
     super('Game');
@@ -110,27 +127,41 @@ export class GameScene extends Phaser.Scene {
     this.waveDelay = 1500;
     this.placing = false;
     this.selectedPlaced = null;
+    this.lastPlaced = null;
     this.aging = false;
     this.ageChannel = 0;
     this.ageTarget = null;
     this.spawnEdgeIndex = 0;
     this.pointerDown = false;
+    this.dockDragging = false;
+    this.keepHpVisibleUntil = 0;
+
+    try {
+      this.taught = localStorage.getItem(TEACH_KEY) === '1';
+    } catch {
+      this.taught = false;
+    }
+    this.teachMsg = this.taught ? null : 'Drag tower into courtyard';
 
     this.cameras.main.setBackgroundColor(Palette.grassDark);
     this.fort = new FortSystem(this, this.layoutId);
+    this.fx = new FxSystem(this);
 
     this.keepTower = new TowerUnit(this, this.fort.keepPos.x, this.fort.keepPos.y, 'keep');
     this.towers.push(this.keepTower);
 
-    this.keepHpBar = this.add.graphics().setDepth(26);
+    this.keepHpBar = this.add.graphics().setDepth(26).setAlpha(0);
     this.keepHpLabel = this.add
       .text(this.fort.keepPos.x, this.fort.keepPos.y + 36, '', {
         fontSize: '11px',
         color: '#F0EBE0',
         fontFamily: 'system-ui',
+        backgroundColor: '#1A2A22aa',
+        padding: { x: 4, y: 2 },
       })
       .setOrigin(0.5)
-      .setDepth(27);
+      .setDepth(27)
+      .setAlpha(0);
     this.drawKeepHp();
 
     this.enemyPool = new Pool(
@@ -146,12 +177,10 @@ export class GameScene extends Phaser.Scene {
 
     this.ghost = new PlacementGhost(this);
 
-    // Placement input on game world
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
 
-    // Wall repair taps
     for (const seg of this.fort.segments.values()) {
       seg.hitZone.on('pointerup', () => this.onWallTap(seg.dir));
     }
@@ -168,6 +197,7 @@ export class GameScene extends Phaser.Scene {
       this.input.off('pointermove', this.onPointerMove, this);
       this.input.off('pointerup', this.onPointerUp, this);
       this.ghost.destroy();
+      this.fx.destroy();
       this.fort.destroy();
     });
 
@@ -178,6 +208,22 @@ export class GameScene extends Phaser.Scene {
   private onHidden = (): void => {
     if (this.status === 'playing') this.setPaused(true);
   };
+
+  skipTeach(): void {
+    this.teachMsg = null;
+    this.taught = true;
+    try {
+      localStorage.setItem(TEACH_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    this.emitHud();
+  }
+
+  private completeTeach(): void {
+    if (!this.teachMsg) return;
+    this.skipTeach();
+  }
 
   private drawKeepHp(): void {
     const g = this.keepHpBar;
@@ -193,13 +239,73 @@ export class GameScene extends Phaser.Scene {
     this.keepHpLabel.setText(`Keep ${Math.ceil(this.keepHp)}`);
   }
 
-  private onPointerDown = (pointer: Phaser.Input.Pointer): void => {
-    if (this.paused || this.status !== 'playing') return;
-    // Ignore UI tray region
-    if (pointer.y > this.scale.height - 100) return;
-    if (pointer.y < 48) return;
+  private showKeepHp(ms = 1200): void {
+    this.keepHpVisibleUntil = this.time.now + ms;
+    this.keepHpBar.setAlpha(1);
+    this.keepHpLabel.setAlpha(1);
+  }
 
-    // If tapping a placed tower — handled by tower hitZone; don't start place
+  private inPlayfield(x: number, y: number): boolean {
+    return y > HUD_TOP + 8 && y < this.scale.height - HUD_BOTTOM;
+  }
+
+  /** Start drag-place from dock button (Clash Royale style) */
+  beginDockPlace(id: TowerId, x: number, y: number): void {
+    audio.unlock();
+    if (this.paused || this.status !== 'playing') return;
+    const def = TOWERS[id];
+    if (!def.buildable) return;
+    if (def.unlockAge === 'feudal' && ageIndex(this.age) < ageIndex('feudal')) return;
+    this.clearPlacedSelection();
+    this.selectedTower = id;
+    this.placing = true;
+    this.dockDragging = true;
+    this.pointerDown = true;
+    this.ghost.setTower(id);
+    this.updateGhost(x, y);
+    this.emitHud();
+  }
+
+  updateDockPlace(x: number, y: number): void {
+    if (!this.placing || !this.dockDragging) return;
+    this.updateGhost(x, y);
+  }
+
+  endDockPlace(x: number, y: number): void {
+    if (!this.placing || !this.dockDragging) return;
+    this.dockDragging = false;
+    this.pointerDown = false;
+    if (this.paused || this.status !== 'playing') {
+      this.cancelPlace();
+      return;
+    }
+    // Drag-off cancel: release in dock/top chrome
+    if (!this.inPlayfield(x, y)) {
+      this.cancelPlace();
+      audio.play('deny');
+      return;
+    }
+    const ok = this.tryPlace(x, y);
+    this.ghost.hide();
+    this.placing = false;
+    if (!ok) audio.play('deny');
+    this.emitHud();
+  }
+
+  private cancelPlace(): void {
+    this.ghost.hide();
+    this.placing = false;
+    this.dockDragging = false;
+    this.pointerDown = false;
+    this.emitHud();
+  }
+
+  private onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    audio.unlock();
+    if (this.paused || this.status !== 'playing') return;
+    if (this.dockDragging) return;
+    if (!this.inPlayfield(pointer.x, pointer.y)) return;
+
     this.pointerDown = true;
     if (this.selectedTower && TOWERS[this.selectedTower].buildable) {
       this.placing = true;
@@ -210,35 +316,44 @@ export class GameScene extends Phaser.Scene {
   };
 
   private onPointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (this.dockDragging) return;
     if (!this.placing || !this.pointerDown) return;
     this.updateGhost(pointer.x, pointer.y);
   };
 
   private onPointerUp = (pointer: Phaser.Input.Pointer): void => {
+    if (this.dockDragging) return;
     if (!this.placing) {
       this.pointerDown = false;
       return;
     }
     this.pointerDown = false;
     if (this.paused || this.status !== 'playing') {
-      this.ghost.hide();
-      this.placing = false;
+      this.cancelPlace();
       return;
     }
-    if (pointer.y > this.scale.height - 100 || pointer.y < 48) {
-      this.ghost.hide();
-      this.placing = false;
+    // Lift to commit; drag-off / HUD cancel
+    if (!this.inPlayfield(pointer.x, pointer.y)) {
+      this.cancelPlace();
+      audio.play('deny');
       return;
     }
-    this.tryPlace(pointer.x, pointer.y);
+    const ok = this.tryPlace(pointer.x, pointer.y);
     this.ghost.hide();
     this.placing = false;
+    if (!ok) audio.play('deny');
     this.emitHud();
   };
 
   private updateGhost(x: number, y: number): void {
-    const valid = this.isValidPlacement(x, y);
+    const valid = this.inPlayfield(x, y) && this.isValidPlacement(x, y) && this.canAffordSelected();
     this.ghost.show(x, y, valid);
+  }
+
+  private canAffordSelected(): boolean {
+    if (!this.selectedTower) return false;
+    const def = TOWERS[this.selectedTower];
+    return this.wood >= def.costWood && this.gold >= def.costGold;
   }
 
   private isValidPlacement(x: number, y: number): boolean {
@@ -246,18 +361,18 @@ export class GameScene extends Phaser.Scene {
     return this.fort.canPlace(x, y, this.fort.keepPos, others);
   }
 
-  private tryPlace(x: number, y: number): void {
-    if (!this.selectedTower) return;
+  private tryPlace(x: number, y: number): boolean {
+    if (!this.selectedTower) return false;
     const def = TOWERS[this.selectedTower];
-    if (!def.buildable) return;
-    if (def.unlockAge === 'feudal' && ageIndex(this.age) < ageIndex('feudal')) return;
+    if (!def.buildable) return false;
+    if (def.unlockAge === 'feudal' && ageIndex(this.age) < ageIndex('feudal')) return false;
     if (this.wood < def.costWood || this.gold < def.costGold) {
       this.game.events.emit('keepward-toast', 'Not enough resources');
-      return;
+      return false;
     }
     if (!this.isValidPlacement(x, y)) {
       this.game.events.emit('keepward-toast', 'Place inside the courtyard');
-      return;
+      return false;
     }
     this.wood -= def.costWood;
     this.gold -= def.costGold;
@@ -268,12 +383,18 @@ export class GameScene extends Phaser.Scene {
       if (this.selectedPlaced !== tower) tower.showRange(false);
     });
     this.towers.push(tower);
+    this.lastPlaced = tower;
+    this.fx.placePop(x, y);
+    audio.play('place');
+    this.completeTeach();
     this.emitHud();
+    return true;
   }
 
   selectPlacedTower(tower: TowerUnit): void {
     if (tower.towerId === 'keep') return;
     if (this.placing) return;
+    audio.unlock();
     for (const t of this.towers) t.showRange(false);
     this.selectedPlaced = tower;
     tower.showRange(true);
@@ -286,6 +407,7 @@ export class GameScene extends Phaser.Scene {
       this.selectedPlaced.showRange(false);
       this.selectedPlaced = null;
     }
+    this.emitHud();
   }
 
   selectBuildTower(id: TowerId | null): void {
@@ -299,25 +421,49 @@ export class GameScene extends Phaser.Scene {
     const t = this.selectedPlaced;
     if (!t.canUnlockRank(track)) {
       this.game.events.emit('keepward-toast', `Need ${t.killsNeededForNext(track)} kills`);
+      audio.play('deny');
       return;
     }
     const cost = t.upgradeCost(track);
     if (!cost) return;
     if (this.wood < cost.wood || this.gold < cost.gold) {
       this.game.events.emit('keepward-toast', 'Not enough resources');
+      audio.play('deny');
       return;
     }
     this.wood -= cost.wood;
     this.gold -= cost.gold;
     t.applyUpgrade(track);
+    audio.play('upgrade');
     this.game.events.emit('keepward-toast', `${TRACK_SHORT[track]} upgraded`);
+    this.emitHud();
+  }
+
+  /** Sell selected tower (50%) or Undo last place (full refund within window) */
+  sellOrUndoSelected(): void {
+    if (!this.selectedPlaced || this.paused || this.status !== 'playing') return;
+    const t = this.selectedPlaced;
+    const canUndo =
+      this.lastPlaced === t && this.time.now - t.placedAt <= UNDO_MS && t.kills === 0;
+    const refund = t.refund(canUndo);
+    this.wood += refund.wood;
+    this.gold += refund.gold;
+    const idx = this.towers.indexOf(t);
+    if (idx >= 0) this.towers.splice(idx, 1);
+    if (this.lastPlaced === t) this.lastPlaced = null;
+    this.selectedPlaced = null;
+    t.destroyTower();
+    audio.play(canUndo ? 'sell' : 'sell');
+    this.game.events.emit(
+      'keepward-toast',
+      canUndo ? `Undo +${refund.wood}W ${refund.gold}G` : `Sold +${refund.wood}W ${refund.gold}G`,
+    );
     this.emitHud();
   }
 
   tryWallUpgrade(id: 'hardenedTimbers' | 'stoneFacing'): void {
     if (this.paused || this.status !== 'playing') return;
     if (id === 'hardenedTimbers') {
-      if (this.age !== 'feudal' && ageIndex(this.age) < ageIndex('feudal')) return;
       if (ageIndex(this.age) < ageIndex('feudal')) return;
       if (this.fort.hardened) return;
       const u = TUNING.wallUpgrades.hardenedTimbers;
@@ -325,6 +471,7 @@ export class GameScene extends Phaser.Scene {
       this.wood -= u.costWood;
       this.gold -= u.costGold;
       this.fort.applyHardenedTimbers();
+      audio.play('upgrade');
       this.game.events.emit('keepward-toast', 'Hardened Timbers!');
     } else {
       if (ageIndex(this.age) < ageIndex('castle')) return;
@@ -334,6 +481,7 @@ export class GameScene extends Phaser.Scene {
       this.wood -= u.costWood;
       this.gold -= u.costGold;
       this.fort.applyStoneFacing();
+      audio.play('upgrade');
       this.game.events.emit('keepward-toast', 'Stone Facing!');
     }
     this.emitHud();
@@ -354,10 +502,10 @@ export class GameScene extends Phaser.Scene {
     const result = seg.repairChunk(this.age);
     if (!result) return;
     if (this.wood < result.wood || this.gold < result.gold) {
-      // revert
       seg.hp -= result.healed;
       seg.redraw(this.fort.stoneFaced);
       this.game.events.emit('keepward-toast', 'Not enough to repair');
+      audio.play('deny');
       return;
     }
     this.wood -= result.wood;
@@ -390,6 +538,7 @@ export class GameScene extends Phaser.Scene {
     this.aging = false;
     this.ageTarget = null;
     this.fort.onAgeUp(prev, next);
+    audio.play('age');
     this.game.events.emit('keepward-toast', `Advanced to ${AGES[next].name}!`);
     this.emitHud();
   }
@@ -402,6 +551,12 @@ export class GameScene extends Phaser.Scene {
   togglePause(): void {
     if (this.status !== 'playing') return;
     this.setPaused(!this.paused);
+  }
+
+  toggleMute(): void {
+    audio.unlock();
+    audio.toggleMute();
+    this.emitHud();
   }
 
   restart(): void {
@@ -429,6 +584,9 @@ export class GameScene extends Phaser.Scene {
     let selectedPlaced: GameHudState['selectedPlaced'] = null;
     if (this.selectedPlaced) {
       const t = this.selectedPlaced;
+      const canUndo =
+        this.lastPlaced === t && this.time.now - t.placedAt <= UNDO_MS && t.kills === 0;
+      const refund = t.refund(canUndo);
       selectedPlaced = {
         id: t.towerId,
         kills: t.kills,
@@ -443,6 +601,9 @@ export class GameScene extends Phaser.Scene {
           range: t.upgradeCost('range'),
           damage: t.upgradeCost('damage'),
         },
+        canUndo,
+        sellWood: refund.wood,
+        sellGold: refund.gold,
       };
     }
 
@@ -470,6 +631,8 @@ export class GameScene extends Phaser.Scene {
       stoneFaced: this.fort.stoneFaced,
       selectedPlaced,
       wallUpgradeAvailable,
+      muted: audio.muted,
+      teach: this.teachMsg,
     };
   }
 
@@ -478,16 +641,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Fade keep HP when timer expires
+    if (this.keepHpBar.alpha > 0 && this.time.now > this.keepHpVisibleUntil && this.keepHp > 0) {
+      this.keepHpBar.setAlpha(Math.max(0, this.keepHpBar.alpha - delta / 400));
+      this.keepHpLabel.setAlpha(this.keepHpBar.alpha);
+    }
+
     if (this.paused || this.status !== 'playing') return;
     const dt = delta / 1000;
     const dtMs = delta;
 
-    // Passive income
     const pm = passiveMult(this.age);
     this.wood += TUNING.passive.woodPerSec * pm * dt;
     this.gold += TUNING.passive.goldPerSec * pm * dt;
 
-    // Age channel
     if (this.aging) {
       this.ageChannel += dtMs;
       this.emitHud();
@@ -496,13 +663,13 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Waves
     if (this.betweenWaves) {
       this.waveDelay -= dtMs;
       if (this.waveDelay <= 0) {
         if (this.waveIndex >= WAVES.length) {
           this.status = 'won';
           this.emitHud();
+          audio.play('victory');
           this.game.events.emit('keepward-toast', 'Victory! The keep stands.');
           return;
         }
@@ -519,7 +686,6 @@ export class GameScene extends Phaser.Scene {
       if (this.spawnQueue.length === 0) this.spawning = false;
     }
 
-    // Enemies
     const now = this.time.now;
     for (const e of this.enemies) {
       if (!e.alive) continue;
@@ -536,23 +702,35 @@ export class GameScene extends Phaser.Scene {
           ev.wallDamage.splashAdj,
         );
         if (breached.length) {
+          for (const d of breached) {
+            const seg = this.fort.segments.get(d);
+            if (seg) {
+              this.fx.breachDust(seg.def.breachPoint.x, seg.def.breachPoint.y);
+              this.fx.wallSquash(seg.gfx);
+            }
+          }
+          this.fx.shortShake(0.008, 140);
+          this.fx.flash(Palette.blood, 0.18, 100);
+          audio.play('breach');
           this.game.events.emit('keepward-toast', `Breach at ${breached.join(', ')}!`);
         }
       }
       if (ev.keepDamage) {
         this.keepHp -= ev.keepDamage;
         this.drawKeepHp();
+        this.showKeepHp();
         if (this.keepHp <= 0) {
           this.keepHp = 0;
           this.status = 'lost';
           this.emitHud();
+          audio.play('defeat');
+          this.fx.flash(Palette.blood, 0.35, 200);
           this.game.events.emit('keepward-toast', 'The keep has fallen…');
           return;
         }
       }
     }
 
-    // Towers fire (including keep)
     for (const tower of this.towers) {
       const target = tower.tryAcquire(this.enemies, dtMs);
       if (target) {
@@ -578,7 +756,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Projectiles
     for (let i = this.activeProjs.length - 1; i >= 0; i--) {
       const p = this.activeProjs[i];
       if (!p.update(dt)) {
@@ -588,7 +765,6 @@ export class GameScene extends Phaser.Scene {
       }
       let hit = false;
       let killer: TowerUnit | null = null;
-      // Find which tower's shot roughly — attribute kill to nearest tower of matching splash
       for (const e of this.enemies) {
         if (!e.alive) continue;
         const d = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y);
@@ -616,7 +792,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Wave clear
     if (!this.betweenWaves && !this.spawning && this.waveAlive <= 0) {
       const w = WAVES[this.waveIndex];
       this.gold += w.bonusGold;
@@ -632,7 +807,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Throttled HUD for resources
     if (Math.floor(_time / 250) !== Math.floor((_time - delta) / 250)) {
       this.emitHud();
     }
@@ -649,7 +823,6 @@ export class GameScene extends Phaser.Scene {
         best = t;
       }
     }
-    // If keep shot
     if (!best || bestD > 200) {
       const kd = Phaser.Math.Distance.Between(x, y, this.keepTower.x, this.keepTower.y);
       if (kd < bestD) return this.keepTower;
@@ -658,12 +831,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private damageEnemy(e: EnemyUnit, dmg: number, killer: TowerUnit | null): void {
+    if (!e.alive) return;
+    this.fx.hitFlash(e);
     const killed = e.takeDamage(dmg);
     if (killed) {
-      this.wood += e.rewardWood;
-      this.gold += e.rewardGold;
+      const gx = e.x;
+      const gy = e.y;
+      const rw = e.rewardWood;
+      const rg = e.rewardGold;
+      this.wood += rw;
+      this.gold += rg;
       this.waveAlive = Math.max(0, this.waveAlive - 1);
       if (killer && killer.towerId !== 'keep') killer.onKill();
+      const toX = killer ? killer.x : this.keepTower.x;
+      const toY = killer ? killer.y : this.keepTower.y;
+      this.fx.goldToTower(gx, gy, toX, toY, rg, rw);
+      this.fx.flash(Palette.gold, 0.08, 50);
+      audio.play('kill');
+      this.fx.deathSquash(e, () => {
+        e.kill(true);
+      });
       this.emitHud();
     }
   }
@@ -700,6 +887,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.spawnQueue.sort((a, b) => a.at - b.at);
     this.emitHud();
+    audio.play('wave');
     this.game.events.emit('keepward-toast', `Wave ${wave.wave} — ${edge} edge`);
   }
 
@@ -716,7 +904,6 @@ export class GameScene extends Phaser.Scene {
       this.fort.keepPos,
       !!elite,
     );
-    // If chosen wall already breached (all down), go straight in via closest hole
     if (wall.breached) {
       const br = this.fort.closestBreach(spawn);
       if (br) {

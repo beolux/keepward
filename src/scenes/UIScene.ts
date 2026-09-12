@@ -3,22 +3,24 @@ import { GAME_W, GAME_H } from '../data/map';
 import { Palette } from '../data/palette';
 import { TOWERS, TRACK_LABELS, type TowerId, type UpgradeTrack } from '../data/towers';
 import { TUNING } from '../data/tuning';
+import { audio } from '../systems/AudioSystem';
 import type { GameScene, GameHudState } from './GameScene';
 
 export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
   private woodText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
-  private keepText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private ageText!: Phaser.GameObjects.Text;
   private toastText!: Phaser.GameObjects.Text;
   private overlay?: Phaser.GameObjects.Container;
+  private teachOverlay?: Phaser.GameObjects.Container;
   private trayBtns: {
     id: TowerId;
     bg: Phaser.GameObjects.Rectangle;
     label: Phaser.GameObjects.Text;
     cost: Phaser.GameObjects.Text;
+    pressed: boolean;
   }[] = [];
   private ageBtn!: Phaser.GameObjects.Rectangle;
   private ageBtnLabel!: Phaser.GameObjects.Text;
@@ -26,8 +28,12 @@ export class UIScene extends Phaser.Scene {
   private wallBtnLabel!: Phaser.GameObjects.Text;
   private pauseBtn!: Phaser.GameObjects.Rectangle;
   private pauseLabel!: Phaser.GameObjects.Text;
+  private muteBtn!: Phaser.GameObjects.Rectangle;
+  private muteLabel!: Phaser.GameObjects.Text;
   private panel?: Phaser.GameObjects.Container;
   private channelBar!: Phaser.GameObjects.Graphics;
+  private tipText!: Phaser.GameObjects.Text;
+  private dockDragId: TowerId | null = null;
 
   constructor() {
     super('UI');
@@ -38,20 +44,18 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const topY = 18;
-    this.add.rectangle(GAME_W / 2, topY + 8, GAME_W, 44, Palette.hudBg, 0.88).setDepth(100);
+    // Safe-area friendly top band — pause/wave/gold stay top
+    const topY = 22;
+    this.add.rectangle(GAME_W / 2, topY + 6, GAME_W, 52, Palette.hudBg, 0.9).setDepth(100);
 
     this.woodText = this.add
-      .text(8, topY, 'W 100', { fontSize: '13px', color: '#C4A35A', fontFamily: 'system-ui' })
+      .text(10, topY, 'W 100', { fontSize: '14px', color: '#C4A35A', fontFamily: 'system-ui', fontStyle: 'bold' })
       .setDepth(101);
     this.goldText = this.add
-      .text(70, topY, 'G 60', { fontSize: '13px', color: '#D4A84B', fontFamily: 'system-ui' })
-      .setDepth(101);
-    this.keepText = this.add
-      .text(130, topY, 'Keep 1000', { fontSize: '13px', color: '#E08080', fontFamily: 'system-ui' })
+      .text(78, topY, 'G 60', { fontSize: '14px', color: '#D4A84B', fontFamily: 'system-ui', fontStyle: 'bold' })
       .setDepth(101);
     this.waveText = this.add
-      .text(250, topY, 'W 1/50', { fontSize: '13px', color: '#F0EBE0', fontFamily: 'system-ui' })
+      .text(150, topY, 'Wave 1/50', { fontSize: '13px', color: '#F0EBE0', fontFamily: 'system-ui' })
       .setDepth(101);
 
     this.ageText = this.add
@@ -65,13 +69,29 @@ export class UIScene extends Phaser.Scene {
 
     this.channelBar = this.add.graphics().setDepth(102);
 
+    // Mute — ≥44pt
+    this.muteBtn = this.add
+      .rectangle(GAME_W - 78, topY + 8, 44, 44, Palette.hudPanel, 0.95)
+      .setStrokeStyle(1, Palette.stone)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(102);
+    this.muteLabel = this.add
+      .text(GAME_W - 78, topY + 8, '🔊', {
+        fontSize: '16px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    this.muteBtn.on('pointerup', () => this.gameScene.toggleMute());
+
     this.pauseBtn = this.add
-      .rectangle(GAME_W - 28, topY + 10, 44, 44, Palette.hudPanel, 0.9)
+      .rectangle(GAME_W - 28, topY + 8, 44, 44, Palette.hudPanel, 0.95)
       .setStrokeStyle(1, Palette.stone)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
     this.pauseLabel = this.add
-      .text(GAME_W - 28, topY + 10, '❚❚', {
+      .text(GAME_W - 28, topY + 8, '❚❚', {
         fontSize: '14px',
         color: '#F0EBE0',
         fontFamily: 'system-ui',
@@ -80,19 +100,20 @@ export class UIScene extends Phaser.Scene {
       .setDepth(103);
     this.pauseBtn.on('pointerup', () => this.gameScene.togglePause());
 
-    const trayY = GAME_H - 70;
-    this.add.rectangle(GAME_W / 2, trayY + 20, GAME_W, 100, Palette.hudBg, 0.94).setDepth(100);
+    // Bottom dock tray
+    const trayY = GAME_H - 68;
+    this.add.rectangle(GAME_W / 2, trayY + 18, GAME_W, 110, Palette.hudBg, 0.95).setDepth(100);
 
     this.buildTowerButton('watchtower', 55, trayY);
     this.buildTowerButton('mangonel', 145, trayY);
 
     this.ageBtn = this.add
-      .rectangle(245, trayY - 8, 88, 40, Palette.feudal)
+      .rectangle(245, trayY - 6, 88, 44, Palette.feudal)
       .setStrokeStyle(2, Palette.ochreDark)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
     this.ageBtnLabel = this.add
-      .text(245, trayY - 8, 'AGE UP', {
+      .text(245, trayY - 6, 'AGE UP', {
         fontSize: '11px',
         color: '#1A2A22',
         fontFamily: 'system-ui',
@@ -101,15 +122,18 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(103);
-    this.ageBtn.on('pointerup', () => this.gameScene.tryAgeUp());
+    this.ageBtn.on('pointerup', () => {
+      audio.unlock();
+      this.gameScene.tryAgeUp();
+    });
 
     this.wallBtn = this.add
-      .rectangle(335, trayY - 8, 88, 40, Palette.slate)
+      .rectangle(335, trayY - 6, 88, 44, Palette.slate)
       .setStrokeStyle(2, Palette.stone)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
     this.wallBtnLabel = this.add
-      .text(335, trayY - 8, 'WALL\nUPG', {
+      .text(335, trayY - 6, 'WALL\nUPG', {
         fontSize: '10px',
         color: '#F0EBE0',
         fontFamily: 'system-ui',
@@ -118,12 +142,13 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(103);
     this.wallBtn.on('pointerup', () => {
+      audio.unlock();
       const s = this.gameScene.getHudState();
       if (s.wallUpgradeAvailable) this.gameScene.tryWallUpgrade(s.wallUpgradeAvailable);
     });
 
-    this.add
-      .text(GAME_W / 2, trayY + 28, 'Drag/tap inside courtyard to place · Tap tower for upgrades · Tap wall to repair', {
+    this.tipText = this.add
+      .text(GAME_W / 2, trayY + 32, 'Hold dock · drag to place · lift to commit', {
         fontSize: '9px',
         color: '#A0A090',
         fontFamily: 'system-ui',
@@ -132,8 +157,8 @@ export class UIScene extends Phaser.Scene {
       .setDepth(101);
 
     this.toastText = this.add
-      .text(GAME_W / 2, GAME_H * 0.38, '', {
-        fontSize: '16px',
+      .text(GAME_W / 2, GAME_H * 0.36, '', {
+        fontSize: '15px',
         color: '#F0EBE0',
         fontFamily: 'Georgia, serif',
         backgroundColor: '#1A2A22cc',
@@ -144,11 +169,17 @@ export class UIScene extends Phaser.Scene {
       .setDepth(200)
       .setAlpha(0);
 
+    // Global pointer for dock-drag continuation into game world
+    this.input.on('pointermove', this.onGlobalMove, this);
+    this.input.on('pointerup', this.onGlobalUp, this);
+
     this.game.events.on('keepward-hud', this.refresh, this);
     this.game.events.on('keepward-toast', this.showToast, this);
     this.events.once('shutdown', () => {
       this.game.events.off('keepward-hud', this.refresh, this);
       this.game.events.off('keepward-toast', this.showToast, this);
+      this.input.off('pointermove', this.onGlobalMove, this);
+      this.input.off('pointerup', this.onGlobalUp, this);
     });
 
     this.refresh(this.gameScene.getHudState());
@@ -157,13 +188,13 @@ export class UIScene extends Phaser.Scene {
   private buildTowerButton(id: TowerId, x: number, y: number): void {
     const def = TOWERS[id];
     const bg = this.add
-      .rectangle(x, y - 8, 80, 44, Palette.hudPanel)
+      .rectangle(x, y - 6, 84, 48, Palette.hudPanel)
       .setStrokeStyle(2, Palette.stone)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
     const label = this.add
-      .text(x, y - 16, def.name.split(' ')[0], {
-        fontSize: '11px',
+      .text(x, y - 14, def.name.split(' ')[0], {
+        fontSize: '12px',
         color: '#F0EBE0',
         fontFamily: 'system-ui',
         fontStyle: 'bold',
@@ -171,7 +202,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(103);
     const cost = this.add
-      .text(x, y + 2, `${def.costWood}W ${def.costGold}G`, {
+      .text(x, y + 6, `${def.costWood}W ${def.costGold}G`, {
         fontSize: '10px',
         color: '#C4A35A',
         fontFamily: 'system-ui',
@@ -179,9 +210,40 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(103);
 
-    bg.on('pointerup', () => this.gameScene.selectBuildTower(id));
-    this.trayBtns.push({ id, bg, label, cost });
+    const entry = { id, bg, label, cost, pressed: false };
+    this.trayBtns.push(entry);
+
+    bg.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      audio.unlock();
+      const state = this.gameScene.getHudState();
+      if (!state.unlocked.includes(id) || state.paused || state.status !== 'playing') return;
+      entry.pressed = true;
+      bg.setScale(0.92);
+      bg.setFillStyle(Palette.ochreDark);
+      this.dockDragId = id;
+      this.gameScene.selectBuildTower(id);
+      // Start ghost immediately — drag from dock
+      this.gameScene.beginDockPlace(id, ptr.x, ptr.y);
+    });
   }
+
+  private onGlobalMove = (ptr: Phaser.Input.Pointer): void => {
+    if (!this.dockDragId) return;
+    this.gameScene.updateDockPlace(ptr.x, ptr.y);
+  };
+
+  private onGlobalUp = (ptr: Phaser.Input.Pointer): void => {
+    if (!this.dockDragId) return;
+    const id = this.dockDragId;
+    this.dockDragId = null;
+    for (const btn of this.trayBtns) {
+      if (btn.id === id) {
+        btn.pressed = false;
+        btn.bg.setScale(1);
+      }
+    }
+    this.gameScene.endDockPlace(ptr.x, ptr.y);
+  };
 
   private showToast = (msg: string): void => {
     this.toastText.setText(msg);
@@ -190,24 +252,25 @@ export class UIScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.toastText,
       alpha: 0,
-      delay: 1500,
-      duration: 450,
+      delay: 1400,
+      duration: 400,
     });
   };
 
   private refresh = (state: GameHudState): void => {
     this.woodText.setText(`W ${state.wood}`);
     this.goldText.setText(`G ${state.gold}`);
-    this.keepText.setText(`Keep ${state.keepHp}`);
-    this.waveText.setText(`W ${state.wave}/${state.maxWaves}`);
+    this.waveText.setText(`Wave ${state.wave}/${state.maxWaves}`);
     this.ageText.setText(`${state.ageName} · ${state.layoutName}`);
+
+    this.muteLabel.setText(state.muted ? '🔇' : '🔊');
 
     this.channelBar.clear();
     if (state.aging) {
       this.channelBar.fillStyle(0x000000, 0.5);
-      this.channelBar.fillRect(60, 42, 270, 5);
+      this.channelBar.fillRect(60, 46, 200, 5);
       this.channelBar.fillStyle(Palette.imperial, 1);
-      this.channelBar.fillRect(60, 42, 270 * state.ageChannelPct, 5);
+      this.channelBar.fillRect(60, 46, 200 * state.ageChannelPct, 5);
     }
 
     for (const btn of this.trayBtns) {
@@ -215,8 +278,11 @@ export class UIScene extends Phaser.Scene {
       const unlocked = state.unlocked.includes(btn.id);
       const selected = state.selectedTower === btn.id;
       const canAfford = state.wood >= def.costWood && state.gold >= def.costGold;
-      btn.bg.setFillStyle(selected ? Palette.ochreDark : Palette.hudPanel);
-      btn.bg.setStrokeStyle(2, selected ? Palette.ochre : unlocked ? Palette.stone : Palette.slate);
+      if (!btn.pressed) {
+        btn.bg.setFillStyle(selected ? Palette.ochreDark : Palette.hudPanel);
+        btn.bg.setScale(1);
+      }
+      btn.bg.setStrokeStyle(2, selected || btn.pressed ? Palette.ochre : unlocked ? Palette.stone : Palette.slate);
       btn.bg.setAlpha(unlocked ? 1 : 0.35);
       btn.label.setAlpha(unlocked ? 1 : 0.35);
       btn.cost.setColor(canAfford && unlocked ? '#C4A35A' : '#8B3A3A');
@@ -260,8 +326,10 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.pauseLabel.setText(state.paused ? '▶' : '❚❚');
+    this.tipText.setVisible(!state.selectedPlaced);
 
-    this.updateUpgradePanel(state);
+    this.updateBottomSheet(state);
+    this.updateTeach(state);
 
     if (state.paused && state.status === 'playing') {
       if (!this.overlay) this.showOverlay('PAUSED', 'Tap Resume to continue', true);
@@ -274,7 +342,8 @@ export class UIScene extends Phaser.Scene {
     }
   };
 
-  private updateUpgradePanel(state: GameHudState): void {
+  /** Thumb HUD: selected-tower bottom sheet — Upgrade + Sell/Undo */
+  private updateBottomSheet(state: GameHudState): void {
     if (this.panel) {
       this.panel.destroy(true);
       this.panel = undefined;
@@ -282,11 +351,14 @@ export class UIScene extends Phaser.Scene {
     if (!state.selectedPlaced) return;
 
     const sp = state.selectedPlaced;
-    const c = this.add.container(GAME_W / 2, GAME_H - 175).setDepth(150);
-    const bg = this.add.rectangle(0, 0, 360, 86, Palette.hudPanel, 0.95).setStrokeStyle(1, Palette.ochre);
+    // Sit above dock tray for thumb reach
+    const c = this.add.container(GAME_W / 2, GAME_H - 168).setDepth(150);
+    const bg = this.add
+      .rectangle(0, 0, 370, 100, Palette.hudPanel, 0.97)
+      .setStrokeStyle(2, Palette.ochre);
     const title = this.add
-      .text(-170, -34, `${TOWERS[sp.id].name} · ${sp.kills} kills`, {
-        fontSize: '12px',
+      .text(-175, -38, `${TOWERS[sp.id].name} · ${sp.kills} kills`, {
+        fontSize: '13px',
         color: '#C4A35A',
         fontFamily: 'system-ui',
         fontStyle: 'bold',
@@ -296,35 +368,106 @@ export class UIScene extends Phaser.Scene {
     const tracks: UpgradeTrack[] = ['rof', 'range', 'damage'];
     const btns: Phaser.GameObjects.GameObject[] = [bg, title];
     tracks.forEach((track, i) => {
-      const x = -120 + i * 120;
+      const x = -115 + i * 78;
       const rank = sp.ranks[track];
       const cost = sp.costs[track];
       const can = sp.can[track];
       const btn = this.add
-        .rectangle(x, 12, 100, 40, can ? Palette.ochreDark : Palette.slate)
+        .rectangle(x, 8, 72, 44, can ? Palette.ochreDark : Palette.slate)
         .setStrokeStyle(1, can ? Palette.ochre : Palette.stone)
         .setInteractive({ useHandCursor: true });
+      const short = TRACK_LABELS[track].split(' ')[0];
       const label = this.add
-        .text(x, 12, `${TRACK_LABELS[track]}\nR${rank}/3 ${cost ? `${cost.wood}W${cost.gold}G` : 'MAX'}`, {
-          fontSize: '10px',
-          color: '#F0EBE0',
-          fontFamily: 'system-ui',
-          align: 'center',
-        })
+        .text(
+          x,
+          8,
+          `${short}\n${rank}/3 ${cost ? `${cost.wood}W` : 'MAX'}`,
+          {
+            fontSize: '10px',
+            color: '#F0EBE0',
+            fontFamily: 'system-ui',
+            align: 'center',
+          },
+        )
         .setOrigin(0.5);
       btn.on('pointerup', () => this.gameScene.tryUpgradeTrack(track));
       btns.push(btn, label);
     });
 
+    // Sell / Undo — Rift Riff style undo when fresh
+    const sellX = 148;
+    const sellBtn = this.add
+      .rectangle(sellX, 8, 64, 44, sp.canUndo ? Palette.feudal : Palette.blood)
+      .setStrokeStyle(1, Palette.ochre)
+      .setInteractive({ useHandCursor: true });
+    const sellLabel = this.add
+      .text(
+        sellX,
+        8,
+        `${sp.canUndo ? 'Undo' : 'Sell'}\n${sp.sellWood}W${sp.sellGold}G`,
+        {
+          fontSize: '10px',
+          color: '#F0EBE0',
+          fontFamily: 'system-ui',
+          align: 'center',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0.5);
+    sellBtn.on('pointerup', () => this.gameScene.sellOrUndoSelected());
+    btns.push(sellBtn, sellLabel);
+
     const close = this.add
-      .text(165, -34, '✕', { fontSize: '14px', color: '#A0A090', fontFamily: 'system-ui' })
+      .text(170, -38, '✕', { fontSize: '16px', color: '#A0A090', fontFamily: 'system-ui' })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
+    // Expand hit area
+    close.setPadding(8, 8, 8, 8);
     close.on('pointerup', () => this.gameScene.clearPlacedSelection());
     btns.push(close);
 
     c.add(btns);
     this.panel = c;
+  }
+
+  private updateTeach(state: GameHudState): void {
+    if (!state.teach) {
+      if (this.teachOverlay) {
+        this.teachOverlay.destroy(true);
+        this.teachOverlay = undefined;
+      }
+      return;
+    }
+    if (this.teachOverlay) return;
+
+    const c = this.add.container(GAME_W / 2, GAME_H * 0.42).setDepth(250);
+    const bg = this.add
+      .rectangle(0, 0, 300, 72, Palette.hudPanel, 0.92)
+      .setStrokeStyle(2, Palette.ochre)
+      .setInteractive({ useHandCursor: true });
+    // ≤8 words teach-through-play
+    const msg = this.add
+      .text(0, -8, state.teach, {
+        fontSize: '16px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    const skip = this.add
+      .text(0, 22, 'Tap to skip', {
+        fontSize: '11px',
+        color: '#A0A090',
+        fontFamily: 'system-ui',
+      })
+      .setOrigin(0.5);
+    const dismiss = () => this.gameScene.skipTeach();
+    bg.on('pointerup', dismiss);
+    msg.setInteractive({ useHandCursor: true }).on('pointerup', dismiss);
+    skip.setInteractive({ useHandCursor: true }).on('pointerup', dismiss);
+    c.add([bg, msg, skip]);
+    this.teachOverlay = c;
   }
 
   private showOverlay(title: string, sub: string, isPause: boolean): void {

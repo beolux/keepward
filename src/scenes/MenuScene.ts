@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Palette } from '../data/palette';
 import { GAME_W, GAME_H } from '../data/map';
 import { LAYOUT_ORDER, FORT_LAYOUTS, type LayoutId } from '../data/fort';
+import { audio } from '../systems/AudioSystem';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -56,17 +57,20 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     LAYOUT_ORDER.forEach((id, i) => {
-      const y = height * 0.58 + i * 52;
+      const y = height * 0.58 + i * 56;
       this.makeLayoutBtn(id, width / 2, y);
     });
 
     this.add
-      .text(width / 2, height * 0.92, 'Portrait · Free courtyard place · PWA', {
+      .text(width / 2, height * 0.92, 'Portrait · Drag-to-place · PWA', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#A0A090',
       })
       .setOrigin(0.5);
+
+    // Unlock audio on any menu interaction
+    this.input.once('pointerdown', () => audio.unlock());
 
     void GAME_W;
     void GAME_H;
@@ -75,7 +79,7 @@ export class MenuScene extends Phaser.Scene {
   private makeLayoutBtn(id: LayoutId, x: number, y: number): void {
     const layout = FORT_LAYOUTS[id];
     const btn = this.add
-      .rectangle(x, y, 240, 44, Palette.ochre)
+      .rectangle(x, y, 250, 48, Palette.ochre)
       .setStrokeStyle(2, Palette.ochreDark)
       .setInteractive({ useHandCursor: true });
     const label = this.add
@@ -87,7 +91,10 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const start = () => this.scene.start('Game', { layout: id });
+    const start = () => {
+      audio.unlock();
+      this.scene.start('Game', { layout: id });
+    };
     btn.on('pointerup', start);
     label.setInteractive({ useHandCursor: true }).on('pointerup', start);
 

@@ -14,6 +14,10 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   splash: number;
   cooldown = 0;
   selected = false;
+  /** Snapshot of resources spent (base + upgrades) for sell refund */
+  investedWood = 0;
+  investedGold = 0;
+  placedAt = 0;
 
   private bodyGfx: Phaser.GameObjects.Graphics;
   private rangeRing: Phaser.GameObjects.Graphics;
@@ -27,6 +31,9 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     this.fireIntervalMs = def.fireIntervalMs;
     this.damage = def.damage;
     this.splash = def.splash;
+    this.investedWood = def.costWood;
+    this.investedGold = def.costGold;
+    this.placedAt = scene.time.now;
 
     this.rangeRing = scene.add.graphics();
     this.bodyGfx = scene.add.graphics();
@@ -35,9 +42,8 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     this.drawRange(false);
     this.setDepth(25);
 
-    this.hitZone = scene.add
-      .zone(0, 0, 40, 40)
-      .setInteractive({ useHandCursor: true });
+    // ≥44pt hit target
+    this.hitZone = scene.add.zone(0, 0, 48, 48).setInteractive({ useHandCursor: true });
     this.add(this.hitZone);
 
     scene.add.existing(this);
@@ -103,12 +109,11 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     let dmgBonus = 0;
     const th = TUNING.towerUpgradeRanks;
     for (let i = 0; i < this.ranks.rof; i++) rofBonus += th.rof[i];
-    for (let i = 0; i < this.ranks.range; i++) rangeBonus += th.range[i] / 100; // +10% each
+    for (let i = 0; i < this.ranks.range; i++) rangeBonus += th.range[i] / 100;
     for (let i = 0; i < this.ranks.damage; i++) dmgBonus += th.damage[i];
 
     this.damage = def.damage * (1 + dmgBonus);
     this.range = def.range * (1 + rangeBonus);
-    // higher RoF % → shorter interval
     this.fireIntervalMs = def.fireIntervalMs / (1 + rofBonus);
     this.splash = def.splash;
     if (this.selected) this.drawRange(true, true);
@@ -136,9 +141,23 @@ export class TowerUnit extends Phaser.GameObjects.Container {
 
   applyUpgrade(track: UpgradeTrack): boolean {
     if (!this.canUnlockRank(track)) return false;
+    const cost = this.upgradeCost(track);
     this.ranks[track]++;
+    if (cost) {
+      this.investedWood += cost.wood;
+      this.investedGold += cost.gold;
+    }
     this.recomputeStats();
     return true;
+  }
+
+  /** Full refund within undo window; else 50% sell */
+  refund(full: boolean): { wood: number; gold: number } {
+    if (full) return { wood: this.investedWood, gold: this.investedGold };
+    return {
+      wood: Math.floor(this.investedWood * 0.5),
+      gold: Math.floor(this.investedGold * 0.5),
+    };
   }
 
   onKill(): void {
@@ -166,9 +185,13 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     this.hitZone.off('pointerup');
     this.hitZone.on('pointerup', fn);
   }
+
+  destroyTower(): void {
+    this.destroy(true);
+  }
 }
 
-/** Ghost preview while placing */
+/** Ghost preview while placing — green valid / red invalid + live range */
 export class PlacementGhost {
   gfx: Phaser.GameObjects.Graphics;
   rangeGfx: Phaser.GameObjects.Graphics;
@@ -195,22 +218,25 @@ export class PlacementGhost {
     const def = TOWERS[this.towerId];
     const color = valid ? Palette.rangeOk : Palette.rangeBad;
     this.rangeGfx.clear();
-    this.rangeGfx.lineStyle(2, color, 0.6);
+    this.rangeGfx.lineStyle(2.5, color, 0.65);
     this.rangeGfx.strokeCircle(x, y, def.range);
-    this.rangeGfx.fillStyle(color, 0.1);
+    this.rangeGfx.fillStyle(color, 0.12);
     this.rangeGfx.fillCircle(x, y, def.range);
 
     this.gfx.clear();
-    this.gfx.fillStyle(def.color, valid ? 0.85 : 0.4);
+    this.gfx.fillStyle(def.color, valid ? 0.9 : 0.45);
     if (this.towerId === 'watchtower') {
       this.gfx.fillRect(x - 10, y - 8, 20, 28);
-      this.gfx.fillStyle(def.accent, valid ? 0.9 : 0.4);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
       this.gfx.fillTriangle(x, y - 28, x - 14, y - 6, x + 14, y - 6);
     } else {
       this.gfx.fillRoundedRect(x - 14, y - 4, 28, 22, 3);
-      this.gfx.fillStyle(def.accent, valid ? 0.9 : 0.4);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
       this.gfx.fillCircle(x, y - 8, 10);
     }
+    // validity ring around ghost body
+    this.gfx.lineStyle(2, color, 0.9);
+    this.gfx.strokeCircle(x, y, 18);
   }
 
   hide(): void {
@@ -225,5 +251,4 @@ export class PlacementGhost {
   }
 }
 
-// silence unused if TILE only for docs
 void TILE_PX;

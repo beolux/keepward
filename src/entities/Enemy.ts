@@ -11,6 +11,7 @@ export type EnemyState = 'approach' | 'attack_wall' | 'enter' | 'hunt_keep' | 'a
 export class EnemyUnit extends Phaser.GameObjects.Container {
   uid = 0;
   alive = false;
+  dying = false;
   hp = 0;
   maxHp = 0;
   speed = 0;
@@ -81,6 +82,8 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     this.wallAttackAcc = 0;
     this.keepAttackAcc = 0;
     this.alive = true;
+    this.dying = false;
+    this.setScale(1);
     this.setPosition(spawn.x, spawn.y);
     this.drawBody(def.color, def.accent, def.radius);
     this.updateHpBar();
@@ -90,7 +93,6 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     this.setDepth(30);
   }
 
-  /** Retarget to a new breach when walls fall */
   setBreach(breachPoint: { x: number; y: number }, wallDir: WallDir): void {
     this.breachPoint = { ...breachPoint };
     this.targetWall = wallDir;
@@ -133,21 +135,17 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     }
   }
 
-  /**
-   * Returns events for the game scene to apply.
-   */
   tick(
     dt: number,
     wallBreached: (dir: WallDir) => boolean,
     closestBreach: () => { dir: WallDir; point: { x: number; y: number } } | null,
   ): { wallDamage?: { dir: WallDir; dps: number; splashAdj: boolean }; keepDamage?: number } {
-    if (!this.alive) return {};
+    if (!this.alive || this.dying) return {};
     const result: {
       wallDamage?: { dir: WallDir; dps: number; splashAdj: boolean };
       keepDamage?: number;
     } = {};
 
-    // If our wall already breached while approaching/attacking → enter
     if (
       (this.state === 'approach' || this.state === 'attack_wall') &&
       this.targetWall &&
@@ -156,7 +154,6 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
       this.state = 'enter';
     }
 
-    // Enter only after assigned wall breaches (or spawned into enter). Closest hole used while entering.
     if (this.state === 'approach') {
       if (this.moveToward(this.attackPoint.x, this.attackPoint.y, dt, 8)) {
         this.state = 'attack_wall';
@@ -194,7 +191,6 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
       if (this.keepAttackAcc >= 0.5) {
         const ticks = this.keepAttackAcc;
         this.keepAttackAcc = 0;
-        // Keep melee DPS ≈ wall DPS scaled lightly
         result.keepDamage = this.wallDps * 1.5 * ticks;
       }
     }
@@ -220,17 +216,17 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     return false;
   }
 
+  /** Returns true if this hit killed the unit (leaves visible for death squash). */
   takeDamage(raw: number): boolean {
-    if (!this.alive) return false;
+    if (!this.alive || this.dying) return false;
     const dmg = Math.max(1, raw - this.armor);
     this.hp -= dmg;
     this.updateHpBar();
-    this.setAlpha(0.5);
-    this.scene.time.delayedCall(60, () => {
-      if (this.alive) this.setAlpha(1);
-    });
     if (this.hp <= 0) {
-      this.kill(true);
+      this.alive = false;
+      this.dying = true;
+      this.hpBar.setVisible(false);
+      this.hpBarBg.setVisible(false);
       return true;
     }
     return false;
@@ -239,15 +235,17 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
   private updateHpBar(): void {
     const pct = Math.max(0, this.hp / this.maxHp);
     this.hpBar.width = 22 * pct;
-    this.hpBar.setVisible(pct < 1);
-    this.hpBarBg.setVisible(pct < 1);
+    this.hpBar.setVisible(pct < 1 && this.alive);
+    this.hpBarBg.setVisible(pct < 1 && this.alive);
   }
 
   kill(_rewarded: boolean): void {
     this.alive = false;
+    this.dying = false;
     this.setVisible(false);
     this.setActive(false);
     this.setAlpha(1);
+    this.setScale(1);
   }
 }
 
