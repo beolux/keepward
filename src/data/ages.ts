@@ -1,12 +1,12 @@
-export type AgeId = 'dark' | 'feudal';
+import { TUNING } from './tuning';
+
+export type AgeId = 'dark' | 'feudal' | 'castle' | 'imperial';
 
 export interface AgeDef {
   id: AgeId;
   name: string;
   costWood: number;
   costGold: number;
-  damageMult: number;
-  fireRateMult: number; // <1 = faster
   unlocks: string[];
 }
 
@@ -14,21 +14,39 @@ export const AGES: Record<AgeId, AgeDef> = {
   dark: {
     id: 'dark',
     name: 'Dark Age',
-    costWood: 0,
-    costGold: 0,
-    damageMult: 1,
-    fireRateMult: 1,
+    costWood: TUNING.ages.dark.costWood,
+    costGold: TUNING.ages.dark.costGold,
     unlocks: ['watchtower'],
   },
   feudal: {
     id: 'feudal',
     name: 'Feudal Age',
-    costWood: 120,
-    costGold: 100,
-    damageMult: 1.2,
-    fireRateMult: 0.9,
+    costWood: TUNING.ages.feudal.costWood,
+    costGold: TUNING.ages.feudal.costGold,
+    unlocks: ['watchtower', 'mangonel'],
+  },
+  castle: {
+    id: 'castle',
+    name: 'Castle Age',
+    costWood: TUNING.ages.castle.costWood,
+    costGold: TUNING.ages.castle.costGold,
+    unlocks: ['watchtower', 'mangonel'],
+  },
+  imperial: {
+    id: 'imperial',
+    name: 'Imperial Age',
+    costWood: TUNING.ages.imperial.costWood,
+    costGold: TUNING.ages.imperial.costGold,
     unlocks: ['watchtower', 'mangonel'],
   },
 };
 
-export const AGE_ORDER: AgeId[] = ['dark', 'feudal'];
+export const AGE_ORDER: AgeId[] = ['dark', 'feudal', 'castle', 'imperial'];
+
+export function ageIndex(age: AgeId): number {
+  return AGE_ORDER.indexOf(age);
+}
+
+export function passiveMult(age: AgeId): number {
+  return 1 + TUNING.passive.perAgeBonus * ageIndex(age);
+}

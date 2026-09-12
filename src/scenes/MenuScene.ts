@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Palette } from '../data/palette';
 import { GAME_W, GAME_H } from '../data/map';
+import { LAYOUT_ORDER, FORT_LAYOUTS, type LayoutId } from '../data/fort';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -11,7 +12,6 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor(Palette.bg);
 
-    // decorative grass bands
     const g = this.add.graphics();
     g.fillStyle(Palette.grassDark, 1);
     g.fillRect(0, 0, width, height);
@@ -20,19 +20,18 @@ export class MenuScene extends Phaser.Scene {
       g.fillCircle(Phaser.Math.Between(0, width), Phaser.Math.Between(0, height), Phaser.Math.Between(8, 24));
     }
 
-    // keep silhouette
     const keep = this.add.graphics();
     keep.fillStyle(Palette.slate, 1);
-    keep.fillRoundedRect(width / 2 - 40, height * 0.28, 80, 70, 4);
+    keep.fillRoundedRect(width / 2 - 40, height * 0.22, 80, 70, 4);
     keep.fillStyle(Palette.ochre, 1);
     for (let i = -32; i <= 28; i += 16) {
-      keep.fillRect(width / 2 + i, height * 0.28 - 18, 12, 20);
+      keep.fillRect(width / 2 + i, height * 0.22 - 18, 12, 20);
     }
     keep.fillStyle(Palette.dirtDark, 1);
-    keep.fillRect(width / 2 - 10, height * 0.28 + 35, 20, 35);
+    keep.fillRect(width / 2 - 10, height * 0.22 + 35, 20, 35);
 
     this.add
-      .text(width / 2, height * 0.18, 'KEEPWARD', {
+      .text(width / 2, height * 0.12, 'KEEPWARD', {
         fontFamily: 'Georgia, serif',
         fontSize: '42px',
         color: '#C4A35A',
@@ -42,45 +41,60 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * 0.48, 'Hold the keep.\nPlace towers on stone pads.\nAge up. Survive 10 waves.', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '15px',
-        color: '#F0EBE0',
-        align: 'center',
-        lineSpacing: 6,
-      })
+      .text(
+        width / 2,
+        height * 0.42,
+        'Fort siege. Free-place towers in the courtyard.\nWalls fall. Breach. Hold the Keep.\n50 waves · Age up · Upgrade by kills.',
+        {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#F0EBE0',
+          align: 'center',
+          lineSpacing: 5,
+        },
+      )
       .setOrigin(0.5);
 
-    const btn = this.add
-      .rectangle(width / 2, height * 0.68, 220, 56, Palette.ochre)
-      .setStrokeStyle(2, Palette.ochreDark)
-      .setInteractive({ useHandCursor: true });
-
-    const btnLabel = this.add
-      .text(width / 2, height * 0.68, 'DEFEND', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        color: '#1A2A22',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-
-    const start = () => {
-      this.scene.start('Game');
-    };
-    btn.on('pointerup', start);
-    btnLabel.setInteractive({ useHandCursor: true }).on('pointerup', start);
+    LAYOUT_ORDER.forEach((id, i) => {
+      const y = height * 0.58 + i * 52;
+      this.makeLayoutBtn(id, width / 2, y);
+    });
 
     this.add
-      .text(width / 2, height * 0.88, 'Portrait · Snap pads · PWA ready', {
+      .text(width / 2, height * 0.92, 'Portrait · Free courtyard place · PWA', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#A0A090',
       })
       .setOrigin(0.5);
 
-    // ensure logical size reference unused warning silenced
     void GAME_W;
     void GAME_H;
+  }
+
+  private makeLayoutBtn(id: LayoutId, x: number, y: number): void {
+    const layout = FORT_LAYOUTS[id];
+    const btn = this.add
+      .rectangle(x, y, 240, 44, Palette.ochre)
+      .setStrokeStyle(2, Palette.ochreDark)
+      .setInteractive({ useHandCursor: true });
+    const label = this.add
+      .text(x, y, id === 'square' ? `DEFEND · ${layout.name}` : layout.name, {
+        fontFamily: 'Georgia, serif',
+        fontSize: id === 'square' ? '18px' : '16px',
+        color: '#1A2A22',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    const start = () => this.scene.start('Game', { layout: id });
+    btn.on('pointerup', start);
+    label.setInteractive({ useHandCursor: true }).on('pointerup', start);
+
+    if (id !== 'square') {
+      btn.setFillStyle(Palette.hudPanel);
+      label.setColor('#F0EBE0');
+      btn.setStrokeStyle(2, Palette.stone);
+    }
   }
 }

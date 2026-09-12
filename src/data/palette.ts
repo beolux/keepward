@@ -22,4 +22,9 @@ export const Palette = {
   white: 0xf0ebe0,
   muted: 0xa0a090,
   feudal: 0xb87333,
+  castle: 0x8a9aaa,
+  imperial: 0xd4a84b,
+  breach: 0x4a3020,
+  rangeOk: 0x6aaa6a,
+  rangeBad: 0xaa4a4a,
 } as const;

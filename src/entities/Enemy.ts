@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
-import { ENEMIES, type EnemyId } from '../data/enemies';
+import { ENEMIES, eliteStats, type EnemyId } from '../data/enemies';
 import { Palette } from '../data/palette';
+import type { WallDir } from '../data/fort';
+import { TUNING } from '../data/tuning';
 
 let nextEnemyId = 1;
+
+export type EnemyState = 'approach' | 'attack_wall' | 'enter' | 'hunt_keep' | 'attack_keep';
 
 export class EnemyUnit extends Phaser.GameObjects.Container {
   uid = 0;
@@ -11,16 +15,22 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
   maxHp = 0;
   speed = 0;
   armor = 0;
+  wallDps = 0;
   enemyId: EnemyId = 'militia';
-  pathIndex = 0;
-  progress = 0; // 0..1 along current segment
   rewardWood = 0;
   rewardGold = 0;
   radius = 10;
+  elite = false;
+  state: EnemyState = 'approach';
+  targetWall: WallDir | null = null;
+  private attackPoint = { x: 0, y: 0 };
+  private breachPoint = { x: 0, y: 0 };
+  private keepPos = { x: 0, y: 0 };
+  private wallAttackAcc = 0;
+  private keepAttackAcc = 0;
   private bodyGfx: Phaser.GameObjects.Graphics;
   private hpBarBg: Phaser.GameObjects.Rectangle;
   private hpBar: Phaser.GameObjects.Rectangle;
-  private waypoints: { x: number; y: number }[] = [];
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
@@ -33,73 +43,180 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
-  spawn(id: EnemyId, waypoints: { x: number; y: number }[]): void {
+  spawn(
+    id: EnemyId,
+    spawn: { x: number; y: number },
+    wallDir: WallDir,
+    attackPoint: { x: number; y: number },
+    breachPoint: { x: number; y: number },
+    keepPos: { x: number; y: number },
+    elite = false,
+  ): void {
     const def = ENEMIES[id];
     this.uid = nextEnemyId++;
     this.enemyId = id;
-    this.hp = def.hp;
-    this.maxHp = def.hp;
+    this.elite = elite;
+    const stats = elite ? eliteStats(def) : def;
+    this.hp = 'hp' in stats && elite ? stats.hp : def.hp;
+    this.maxHp = this.hp;
+    if (elite) {
+      this.hp = stats.hp;
+      this.maxHp = stats.hp;
+      this.wallDps = stats.wallDps;
+      this.rewardWood = stats.rewardWood;
+      this.rewardGold = stats.rewardGold;
+    } else {
+      this.wallDps = def.wallDps;
+      this.rewardWood = def.rewardWood;
+      this.rewardGold = def.rewardGold;
+    }
     this.speed = def.speed;
     this.armor = def.armor;
-    this.rewardWood = def.rewardWood;
-    this.rewardGold = def.rewardGold;
     this.radius = def.radius;
-    this.waypoints = waypoints;
-    this.pathIndex = 0;
-    this.progress = 0;
+    this.targetWall = wallDir;
+    this.attackPoint = { ...attackPoint };
+    this.breachPoint = { ...breachPoint };
+    this.keepPos = { ...keepPos };
+    this.state = 'approach';
+    this.wallAttackAcc = 0;
+    this.keepAttackAcc = 0;
     this.alive = true;
-    const start = waypoints[0];
-    this.setPosition(start.x, start.y);
+    this.setPosition(spawn.x, spawn.y);
     this.drawBody(def.color, def.accent, def.radius);
-    this.hpBar.setVisible(true);
-    this.hpBarBg.setVisible(true);
     this.updateHpBar();
     this.setVisible(true);
     this.setActive(true);
+    this.setAlpha(1);
     this.setDepth(30);
+  }
+
+  /** Retarget to a new breach when walls fall */
+  setBreach(breachPoint: { x: number; y: number }, wallDir: WallDir): void {
+    this.breachPoint = { ...breachPoint };
+    this.targetWall = wallDir;
   }
 
   private drawBody(color: number, accent: number, r: number): void {
     const g = this.bodyGfx;
     g.clear();
-    // capsule body
-    g.fillStyle(color, 1);
-    g.fillRoundedRect(-r * 0.7, -r, r * 1.4, r * 2, r * 0.7);
-    // head accent
-    g.fillStyle(accent, 1);
-    g.fillCircle(0, -r * 0.55, r * 0.45);
-    // shield / weapon hint for knight
-    if (this.enemyId === 'knight') {
-      g.fillStyle(Palette.slate, 1);
-      g.fillTriangle(r * 0.5, -r * 0.2, r * 1.1, 0, r * 0.5, r * 0.4);
+    const c = this.elite ? Palette.imperial : color;
+    g.fillStyle(c, 1);
+    if (this.enemyId === 'ram') {
+      g.fillRoundedRect(-r, -r * 0.6, r * 2, r * 1.2, 4);
+      g.fillStyle(accent, 1);
+      g.fillTriangle(r * 0.2, 0, r * 1.4, -r * 0.3, r * 1.4, r * 0.3);
+    } else if (this.enemyId === 'elephant') {
+      g.fillEllipse(0, 0, r * 2.2, r * 1.6);
+      g.fillStyle(accent, 1);
+      g.fillCircle(-r * 0.6, -r * 0.3, r * 0.45);
+      g.fillRect(r * 0.3, -r * 0.1, r * 0.9, r * 0.35);
+    } else if (this.enemyId === 'archer') {
+      g.fillRoundedRect(-r * 0.6, -r, r * 1.2, r * 2, r * 0.6);
+      g.fillStyle(accent, 1);
+      g.fillCircle(0, -r * 0.5, r * 0.4);
+      g.lineStyle(2, Palette.ochreDark, 1);
+      g.lineBetween(r * 0.5, -r * 0.2, r * 1.1, r * 0.5);
+    } else if (this.enemyId === 'spearman') {
+      g.fillRoundedRect(-r * 0.65, -r, r * 1.3, r * 2, r * 0.65);
+      g.fillStyle(accent, 1);
+      g.fillCircle(0, -r * 0.55, r * 0.4);
+      g.lineStyle(2, Palette.stoneLight, 1);
+      g.lineBetween(0, r * 0.2, 0, -r * 1.6);
+    } else {
+      g.fillRoundedRect(-r * 0.7, -r, r * 1.4, r * 2, r * 0.7);
+      g.fillStyle(accent, 1);
+      g.fillCircle(0, -r * 0.55, r * 0.45);
+      if (this.enemyId === 'knight') {
+        g.fillStyle(Palette.slate, 1);
+        g.fillTriangle(r * 0.5, -r * 0.2, r * 1.1, 0, r * 0.5, r * 0.4);
+      }
     }
   }
 
-  /** Move along path. Returns true if leaked (reached end). */
-  updateMove(dt: number): boolean {
-    if (!this.alive) return false;
-    let remaining = this.speed * dt;
-    while (remaining > 0 && this.pathIndex < this.waypoints.length - 1) {
-      const a = this.waypoints[this.pathIndex];
-      const b = this.waypoints[this.pathIndex + 1];
-      const segLen = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-      const distLeft = (1 - this.progress) * segLen;
-      if (remaining >= distLeft) {
-        remaining -= distLeft;
-        this.pathIndex++;
-        this.progress = 0;
-        this.setPosition(b.x, b.y);
-      } else {
-        this.progress += remaining / segLen;
-        remaining = 0;
-        this.x = a.x + (b.x - a.x) * this.progress;
-        this.y = a.y + (b.y - a.y) * this.progress;
+  /**
+   * Returns events for the game scene to apply.
+   */
+  tick(
+    dt: number,
+    wallBreached: (dir: WallDir) => boolean,
+    closestBreach: () => { dir: WallDir; point: { x: number; y: number } } | null,
+  ): { wallDamage?: { dir: WallDir; dps: number; splashAdj: boolean }; keepDamage?: number } {
+    if (!this.alive) return {};
+    const result: {
+      wallDamage?: { dir: WallDir; dps: number; splashAdj: boolean };
+      keepDamage?: number;
+    } = {};
+
+    // If our wall already breached while approaching/attacking → enter
+    if (
+      (this.state === 'approach' || this.state === 'attack_wall') &&
+      this.targetWall &&
+      wallBreached(this.targetWall)
+    ) {
+      this.state = 'enter';
+    }
+
+    // Enter only after assigned wall breaches (or spawned into enter). Closest hole used while entering.
+    if (this.state === 'approach') {
+      if (this.moveToward(this.attackPoint.x, this.attackPoint.y, dt, 8)) {
+        this.state = 'attack_wall';
+      }
+    } else if (this.state === 'attack_wall') {
+      if (this.targetWall && wallBreached(this.targetWall)) {
+        this.state = 'enter';
+      } else if (this.targetWall) {
+        this.wallAttackAcc += dt;
+        if (this.wallAttackAcc >= 0.25) {
+          const ticks = this.wallAttackAcc;
+          this.wallAttackAcc = 0;
+          result.wallDamage = {
+            dir: this.targetWall,
+            dps: this.wallDps * ticks,
+            splashAdj: this.enemyId === 'elephant',
+          };
+        }
+      }
+    } else if (this.state === 'enter') {
+      const br = closestBreach();
+      if (br) {
+        this.breachPoint = { ...br.point };
+        this.targetWall = br.dir;
+      }
+      if (this.moveToward(this.breachPoint.x, this.breachPoint.y, dt, 10)) {
+        this.state = 'hunt_keep';
+      }
+    } else if (this.state === 'hunt_keep') {
+      if (this.moveToward(this.keepPos.x, this.keepPos.y, dt, 22)) {
+        this.state = 'attack_keep';
+      }
+    } else if (this.state === 'attack_keep') {
+      this.keepAttackAcc += dt;
+      if (this.keepAttackAcc >= 0.5) {
+        const ticks = this.keepAttackAcc;
+        this.keepAttackAcc = 0;
+        // Keep melee DPS ≈ wall DPS scaled lightly
+        result.keepDamage = this.wallDps * 1.5 * ticks;
       }
     }
-    if (this.pathIndex >= this.waypoints.length - 1) {
-      this.kill(false);
+
+    return result;
+  }
+
+  private moveToward(tx: number, ty: number, dt: number, arrive: number): boolean {
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= arrive) {
+      this.setPosition(tx, ty);
       return true;
     }
+    const step = this.speed * dt;
+    if (step >= dist) {
+      this.setPosition(tx, ty);
+      return true;
+    }
+    this.x += (dx / dist) * step;
+    this.y += (dy / dist) * step;
     return false;
   }
 
@@ -108,7 +225,6 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     const dmg = Math.max(1, raw - this.armor);
     this.hp -= dmg;
     this.updateHpBar();
-    // flash
     this.setAlpha(0.5);
     this.scene.time.delayedCall(60, () => {
       if (this.alive) this.setAlpha(1);
@@ -134,3 +250,5 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     this.setAlpha(1);
   }
 }
+
+void TUNING;
