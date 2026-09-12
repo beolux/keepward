@@ -92,7 +92,7 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     accent: 0xc4a35a,
     unlockAge: 'feudal',
     buildable: true,
-    description: '8 dmg · 0.7/s · range 3.2',
+    description: '8 dmg · 0.7/s · range 4.2',
   },
   keep: {
     id: 'keep',

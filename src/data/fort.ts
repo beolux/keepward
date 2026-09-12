@@ -179,18 +179,34 @@ export function pointInRect(x: number, y: number, r: Rect): boolean {
   return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
 
-/** Spawn points rotating around outer edges */
-export function edgeSpawnPoints(edge: 'N' | 'E' | 'S' | 'W'): { x: number; y: number } {
+/** Spawn along an outer edge; optional bias toward a wall attack point (spread). */
+export function edgeSpawnPoints(
+  edge: 'N' | 'E' | 'S' | 'W',
+  bias?: { x: number; y: number },
+): { x: number; y: number } {
   const margin = 20;
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const jitter = (span: number) => (Math.random() - 0.5) * span;
   switch (edge) {
-    case 'N':
-      return { x: GAME_W / 2 + (Math.random() - 0.5) * 120, y: HUD_TOP + margin };
-    case 'E':
-      return { x: GAME_W - margin, y: cy + (Math.random() - 0.5) * 160 };
-    case 'S':
-      return { x: GAME_W / 2 + (Math.random() - 0.5) * 120, y: GAME_H - HUD_BOTTOM - margin };
-    case 'W':
-      return { x: margin, y: cy + (Math.random() - 0.5) * 160 };
+    case 'N': {
+      const baseX = bias ? bias.x : GAME_W / 2;
+      return { x: clamp(baseX + jitter(bias ? 48 : 120), 40, GAME_W - 40), y: HUD_TOP + margin };
+    }
+    case 'E': {
+      const baseY = bias ? bias.y : cy;
+      return { x: GAME_W - margin, y: clamp(baseY + jitter(bias ? 56 : 160), HUD_TOP + 40, GAME_H - HUD_BOTTOM - 40) };
+    }
+    case 'S': {
+      const baseX = bias ? bias.x : GAME_W / 2;
+      return {
+        x: clamp(baseX + jitter(bias ? 48 : 120), 40, GAME_W - 40),
+        y: GAME_H - HUD_BOTTOM - margin,
+      };
+    }
+    case 'W': {
+      const baseY = bias ? bias.y : cy;
+      return { x: margin, y: clamp(baseY + jitter(bias ? 56 : 160), HUD_TOP + 40, GAME_H - HUD_BOTTOM - 40) };
+    }
   }
 }
 

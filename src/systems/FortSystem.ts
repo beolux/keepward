@@ -180,25 +180,84 @@ export class FortSystem {
     return best;
   }
 
-  /** Weakest non-breached wall in hemisphere of spawn edge */
-  weakestInHemisphere(edge: 'N' | 'E' | 'S' | 'W'): WallSegment {
-    const candidates = WALL_DIRS.filter((d) => {
-      const seg = this.segments.get(d)!;
-      if (seg.breached) return false;
-      // Map edge to walls
-      if (edge === 'N') return d === 'N' || d === 'NE' || d === 'NW';
-      if (edge === 'S') return d === 'S' || d === 'SE' || d === 'SW';
-      if (edge === 'E') return d === 'E' || d === 'NE' || d === 'SE';
-      return d === 'W' || d === 'NW' || d === 'SW';
-    });
-    let list = candidates.map((d) => this.segments.get(d)!);
+  /** Round-robin cursor so waves never all stack on one segment */
+  private hemisphereRR = 0;
+
+  /** Non-breached walls facing a spawn edge (fallback: any intact, else N). */
+  private hemisphereCandidates(edge: 'N' | 'E' | 'S' | 'W'): WallSegment[] {
+    let list = this.wallsForEdge(edge).filter((s) => !s.breached);
     if (list.length === 0) {
       list = [...this.segments.values()].filter((s) => !s.breached);
     }
-    if (list.length === 0) {
-      // all breached — return any
-      return this.segments.get('N')!;
+    if (list.length === 0) return [this.segments.get('N')!];
+    return list;
+  }
+
+  /**
+   * Spread pick across the incoming hemisphere: weighted toward weakest,
+   * blended with uniform + round-robin so the wave never 100% stacks one tile.
+   * Enemies still retarget via breach→enter if a hole opens later.
+   */
+  pickSpreadTarget(edge: 'N' | 'E' | 'S' | 'W'): {
+    wall: WallSegment;
+    attackPoint: { x: number; y: number };
+    breachPoint: { x: number; y: number };
+  } {
+    const list = this.hemisphereCandidates(edge);
+    list.sort((a, b) => a.hp - b.hp);
+
+    // Inverse-HP weights, blended with uniform so weakest cannot monopolize.
+    const inv = list.map((s) => 1 / Math.max(s.hp, 1));
+    const sumInv = inv.reduce((a, b) => a + b, 0) || 1;
+    const uniform = 1 / list.length;
+    let weights = inv.map((w) => 0.55 * (w / sumInv) + 0.45 * uniform);
+
+    // Soft round-robin bump across the sorted hemisphere list.
+    const rr = this.hemisphereRR % list.length;
+    this.hemisphereRR++;
+    weights = weights.map((w, i) => w + (i === rr ? 0.18 : 0));
+    const sumW = weights.reduce((a, b) => a + b, 0) || 1;
+    weights = weights.map((w) => w / sumW);
+
+    let r = Math.random();
+    let wall = list[list.length - 1];
+    for (let i = 0; i < list.length; i++) {
+      r -= weights[i];
+      if (r <= 0) {
+        wall = list[i];
+        break;
+      }
     }
+
+    return {
+      wall,
+      attackPoint: this.jitterAlongSegment(wall),
+      breachPoint: { ...wall.def.breachPoint },
+    };
+  }
+
+  /** Optional jitter along the segment so attackers don't share one pixel. */
+  private jitterAlongSegment(seg: WallSegment): { x: number; y: number } {
+    const ap = seg.def.attackPoint;
+    const r = seg.def.rect;
+    const t = Math.random() - 0.5;
+    const dir = seg.dir;
+    if (dir === 'N' || dir === 'S') {
+      return { x: ap.x + t * Math.max(r.w * 0.55, 24), y: ap.y };
+    }
+    if (dir === 'E' || dir === 'W') {
+      return { x: ap.x, y: ap.y + t * Math.max(r.h * 0.55, 24) };
+    }
+    // Corners — small 2D jitter
+    return {
+      x: ap.x + t * 20,
+      y: ap.y + (Math.random() - 0.5) * 20,
+    };
+  }
+
+  /** @deprecated Prefer pickSpreadTarget — kept for callers that want pure weakest. */
+  weakestInHemisphere(edge: 'N' | 'E' | 'S' | 'W'): WallSegment {
+    const list = this.hemisphereCandidates(edge);
     list.sort((a, b) => a.hp - b.hp);
     return list[0];
   }

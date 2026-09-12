@@ -38,10 +38,10 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 4 · Ram 10 · Elephant 7 (+25% ad
 - Tap wall to repair · Tap BREACH to rebuild (build phase gold outline)
 
 ## Towers
-- Watchtower (Dark): 6 dmg, 1.0/s, range 2.5
+- Watchtower (Dark): 6 dmg, 1.0/s, range 3.4
 - Mangonel (Feudal): 14 splash r=0.8, 0.35/s, range 3.0
 - **Spear Post (Feudal):** 5 dmg, 0.8/s, range 2.0, +100% vs cavalry (knight)
-- **Longbow Tower (Feudal):** 8 dmg, 0.7/s, range 3.2
+- **Longbow Tower (Feudal):** 8 dmg, 0.7/s, range 4.2
 - Kill gates: 8 / 20 / 40 cumulative
 - Tracks: RoF +12/12/16% · Range +10%×3 · Dmg +15/15/20%
 

@@ -95,7 +95,7 @@ export const TUNING = {
     watchtower: {
       damage: 6,
       fireRatePerSec: 1.0,
-      rangeTiles: 2.5,
+      rangeTiles: 3.4,
       splashTiles: 0,
       costWood: 40,
       costGold: 20,
@@ -125,7 +125,7 @@ export const TUNING = {
     longbow: {
       damage: 8,
       fireRatePerSec: 0.7,
-      rangeTiles: 3.2,
+      rangeTiles: 4.2,
       splashTiles: 0,
       costWood: 60,
       costGold: 40,

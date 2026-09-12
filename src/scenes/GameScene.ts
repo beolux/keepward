@@ -1216,15 +1216,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnEnemy(id: EnemyId, edge: 'N' | 'E' | 'S' | 'W', elite?: boolean): void {
-    const wall = this.fort.weakestInHemisphere(edge);
-    const spawn = edgeSpawnPoints(edge);
+    const { wall, attackPoint, breachPoint } = this.fort.pickSpreadTarget(edge);
+    // Spawn along the incoming edge, biased toward the assigned segment.
+    const spawn = edgeSpawnPoints(edge, attackPoint);
     const e = this.enemyPool.acquire();
     e.spawn(
       id,
       spawn,
       wall.dir,
-      wall.def.attackPoint,
-      wall.def.breachPoint,
+      attackPoint,
+      breachPoint,
       this.fort.keepPos,
       !!elite,
     );
