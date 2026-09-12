@@ -4,8 +4,8 @@
 
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
-## Nick override (early1)
-Soft early waves 1–6 (exact counts); knights from w6; first elite w10; w7–11 −25% counts. Enemy HP / tower dmg / walls / place-freeze / w12+ untouched (dmg2 towers still in).
+## Nick / CoS override (early2)
+Softer than early1. Exact comps w1–8; knights from **w8** (not w6); first elite still w10; rams still w12. W9–11 keep −25% mix but knights max 1 until w11. Spawn-time HP ×0.65 on w1–5 and ×0.85 on w6–8 (in `spawnEnemy`, not ENEMIES base). Interval floor 500ms through w8. Tower dmg / walls / place-freeze / w12+ untouched.
 
 ## Fort
 - 8 wall segments: N/NE/E/SE/S/SW/W/NW
@@ -53,7 +53,21 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 4 · Ram 10 · Elephant 7 (+25% ad
 - Keep HP 1000 · auto 3 dmg @ 0.5/s
 
 ## Waves
-50 waves. Knights w6 · Rams w12 · elite every 5 from w10 · Elephant boss w50.
+50 waves. Knights w8 · Rams w12 · elite every 5 from w10 · Elephant boss w50.
+
+### early2 open (exact)
+| Wave | Comp | Notes |
+|------|------|-------|
+| 1 | 3 militia @ 1100ms | HP ×0.65 |
+| 2 | 4 militia @ 1000ms | HP ×0.65 |
+| 3 | 5 militia | HP ×0.65 |
+| 4 | 6 militia + 1 archer (delay 1.2s) | HP ×0.65 |
+| 5 | 6 militia + 2 spears (no archers) | HP ×0.65 |
+| 6 | 7 militia + 2 archers (no knight) | HP ×0.85 |
+| 7 | 7 militia + 2 spears + 1 archer | HP ×0.85 |
+| 8 | 8 militia + 2 spears + 2 archers + 1 knight | HP ×0.85; first knight |
+| 9–11 | −25% mix; knights max 1 | elite pack @ w10 |
+| 12+ | unchanged late curve | rams from 12 |
 
 ## Enemy HP / speed (not on combat DPS sheet)
 See `TUNING.enemies` in `tuning.ts`. Wall DPS + bounties are sheet-pinned.

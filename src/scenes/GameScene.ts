@@ -1229,6 +1229,15 @@ export class GameScene extends Phaser.Scene {
       this.fort.keepPos,
       !!elite,
     );
+    // early2: spawn-time HP scale by wave (do not mutate ENEMIES / TUNING base)
+    const waveNum = this.waveIndex + 1;
+    let hpMult = 1;
+    if (waveNum <= 5) hpMult = 0.65;
+    else if (waveNum <= 8) hpMult = 0.85;
+    if (hpMult !== 1) {
+      e.hp = Math.max(1, Math.ceil(e.hp * hpMult));
+      e.maxHp = e.hp;
+    }
     if (wall.breached) {
       const br = this.fort.closestBreach(spawn);
       if (br) {
