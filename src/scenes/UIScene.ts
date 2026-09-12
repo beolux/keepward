@@ -108,12 +108,16 @@ export class UIScene extends Phaser.Scene {
       .setDepth(103);
     this.pauseBtn.on('pointerup', () => this.gameScene.togglePause());
 
-    // Bottom dock tray
-    const trayY = GAME_H - 68;
-    this.add.rectangle(GAME_W / 2, trayY + 18, GAME_W, 110, Palette.hudBg, 0.95).setDepth(100);
+    // Bottom dock tray — 2-row compact tower buttons + age/wall
+    const trayY = GAME_H - 78;
+    this.add.rectangle(GAME_W / 2, trayY + 22, GAME_W, 128, Palette.hudBg, 0.95).setDepth(100);
 
-    this.buildTowerButton('watchtower', 55, trayY);
-    this.buildTowerButton('mangonel', 145, trayY);
+    // Row 1: Dark + Feudal staples
+    this.buildTowerButton('watchtower', 48, trayY - 22, 72);
+    this.buildTowerButton('mangonel', 122, trayY - 22, 72);
+    // Row 2: Feudal unlocks
+    this.buildTowerButton('spearPost', 48, trayY + 26, 72);
+    this.buildTowerButton('longbow', 122, trayY + 26, 72);
 
     this.ageBtn = this.add
       .rectangle(245, trayY - 6, 88, 44, Palette.feudal)
@@ -156,7 +160,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.tipText = this.add
-      .text(GAME_W / 2, trayY + 32, 'Hold dock · drag to place · lift to commit', {
+      .text(GAME_W / 2, trayY + 52, 'Hold dock · drag to place · lift to commit', {
         fontSize: '9px',
         color: '#A0A090',
         fontFamily: 'system-ui',
@@ -191,7 +195,7 @@ export class UIScene extends Phaser.Scene {
       .setDepth(120)
       .setVisible(false);
 
-    const startY = GAME_H - 168;
+    const startY = GAME_H - 188;
     this.startWaveBtn = this.add
       .rectangle(GAME_W / 2, startY, 220, 56, Palette.ochre)
       .setStrokeStyle(3, Palette.gold)
@@ -259,16 +263,18 @@ export class UIScene extends Phaser.Scene {
     this.refresh(this.gameScene.getHudState());
   }
 
-  private buildTowerButton(id: TowerId, x: number, y: number): void {
+  private buildTowerButton(id: TowerId, x: number, y: number, w = 84): void {
     const def = TOWERS[id];
     const bg = this.add
-      .rectangle(x, y - 6, 84, 48, Palette.hudPanel)
+      .rectangle(x, y - 6, w, 44, Palette.hudPanel)
       .setStrokeStyle(2, Palette.stone)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
+    const short =
+      id === 'spearPost' ? 'Spear' : id === 'longbow' ? 'Longbow' : def.name.split(' ')[0];
     const label = this.add
-      .text(x, y - 14, def.name.split(' ')[0], {
-        fontSize: '12px',
+      .text(x, y - 14, short, {
+        fontSize: '11px',
         color: '#F0EBE0',
         fontFamily: 'system-ui',
         fontStyle: 'bold',
@@ -277,7 +283,7 @@ export class UIScene extends Phaser.Scene {
       .setDepth(103);
     const cost = this.add
       .text(x, y + 6, `${def.costWood}W ${def.costGold}G`, {
-        fontSize: '10px',
+        fontSize: '9px',
         color: '#C4A35A',
         fontFamily: 'system-ui',
       })
@@ -442,7 +448,7 @@ export class UIScene extends Phaser.Scene {
                 : 'WEST';
         this.incomingBanner.setText(`⚔ Incoming ${side}`);
       }
-      this.tipText.setText('Tap walls to repair · place towers · Start Wave');
+      this.tipText.setText('Tap wall to repair · Tap BREACH to rebuild');
       this.tipText.setVisible(!state.selectedPlaced);
     } else {
       this.tipText.setText('Hold dock · drag to place · lift to commit');
@@ -503,7 +509,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     // Sit above dock tray for thumb reach
-    const c = this.add.container(GAME_W / 2, GAME_H - 168).setDepth(150);
+    const c = this.add.container(GAME_W / 2, GAME_H - 188).setDepth(150);
     const bg = this.add
       .rectangle(0, 0, 370, 100, Palette.hudPanel, 0.97)
       .setStrokeStyle(2, Palette.ochre);

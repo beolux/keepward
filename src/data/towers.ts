@@ -1,6 +1,6 @@
 import { TILE_PX, TUNING } from './tuning';
 
-export type TowerId = 'watchtower' | 'mangonel' | 'keep';
+export type TowerId = 'watchtower' | 'mangonel' | 'spearPost' | 'longbow' | 'keep';
 export type UpgradeTrack = 'rof' | 'range' | 'damage';
 
 export interface TowerDef {
@@ -18,10 +18,14 @@ export interface TowerDef {
   unlockAge: 'dark' | 'feudal';
   buildable: boolean;
   description: string;
+  /** Extra damage multiplier vs cavalry (knight) */
+  vsCavalryMult?: number;
 }
 
 const W = TUNING.towers.watchtower;
 const M = TUNING.towers.mangonel;
+const S = TUNING.towers.spearPost;
+const L = TUNING.towers.longbow;
 const K = TUNING.keep;
 
 export const TOWERS: Record<TowerId, TowerDef> = {
@@ -57,6 +61,39 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     buildable: true,
     description: '14 splash · 0.35/s',
   },
+  spearPost: {
+    id: 'spearPost',
+    name: 'Spear Post',
+    costWood: S.costWood,
+    costGold: S.costGold,
+    range: S.rangeTiles * TILE_PX,
+    fireIntervalMs: 1000 / S.fireRatePerSec,
+    damage: S.damage,
+    splash: 0,
+    projectileSpeed: S.projectileSpeed,
+    color: 0x5a4830,
+    accent: 0xa08050,
+    unlockAge: 'feudal',
+    buildable: true,
+    description: '5 dmg · 0.8/s · +100% vs cav',
+    vsCavalryMult: S.vsCavalryMult,
+  },
+  longbow: {
+    id: 'longbow',
+    name: 'Longbow Tower',
+    costWood: L.costWood,
+    costGold: L.costGold,
+    range: L.rangeTiles * TILE_PX,
+    fireIntervalMs: 1000 / L.fireRatePerSec,
+    damage: L.damage,
+    splash: 0,
+    projectileSpeed: L.projectileSpeed,
+    color: 0x3d5c3a,
+    accent: 0xc4a35a,
+    unlockAge: 'feudal',
+    buildable: true,
+    description: '8 dmg · 0.7/s · range 3.2',
+  },
   keep: {
     id: 'keep',
     name: 'Keep',
@@ -74,6 +111,8 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     description: 'Your stronghold',
   },
 };
+
+export const BUILDABLE_TOWERS: TowerId[] = ['watchtower', 'mangonel', 'spearPost', 'longbow'];
 
 export const UPGRADE_TRACKS: UpgradeTrack[] = ['rof', 'range', 'damage'];
 

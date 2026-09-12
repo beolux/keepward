@@ -12,7 +12,7 @@ import { Pool } from '../utils/pool';
 import { FortSystem } from '../systems/FortSystem';
 import { FxSystem } from '../systems/FxSystem';
 import { audio } from '../systems/AudioSystem';
-import type { EnemyId } from '../data/enemies';
+import { isCavalry, type EnemyId } from '../data/enemies';
 import type { WallDir } from '../data/fort';
 import { HUD_TOP, HUD_BOTTOM } from '../data/map';
 
@@ -368,18 +368,25 @@ export class GameScene extends Phaser.Scene {
     if (this.dockDragging || this.placing || this.pointerDown) this.cancelPlace();
   };
 
+  private pointerOverWall(x: number, y: number): boolean {
+    for (const seg of this.fort.segments.values()) {
+      if (seg.containsPoint(x, y)) return true;
+    }
+    return false;
+  }
+
   private onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     audio.unlock();
     if (this.paused || this.status !== 'playing') return;
     if (this.dockDragging) return;
     if (!this.inPlayfield(pointer.x, pointer.y)) return;
 
+    // Never start place from bare playfield tap — dock-drag owns placing.
+    // (selectedTower defaults to watchtower and was stealing wall repair taps.)
     this.pointerDown = true;
-    if (this.selectedTower && TOWERS[this.selectedTower].buildable) {
-      this.placing = true;
-      this.clearPlacedSelection();
-      this.ghost.setTower(this.selectedTower);
-      this.updateGhost(pointer.x, pointer.y);
+    if (this.pointerOverWall(pointer.x, pointer.y)) {
+      // Let wall hitZone handle repair/rebuild on pointerup
+      return;
     }
   };
 
@@ -589,18 +596,69 @@ export class GameScene extends Phaser.Scene {
 
   private onWallTap(dir: WallDir): void {
     if (this.paused || this.status !== 'playing') return;
-    if (this.placing) return;
+    // Ignore wall taps that fire on the same lift as a dock-drag place
+    if (this.time.now < this.ignoreGamePointerUpUntil) return;
+    // Cancel any in-progress place/ghost so repair/rebuild always wins
+    if (this.placing || this.dockDragging || this.ghost.active) {
+      this.cancelPlace();
+    }
     const seg = this.fort.segments.get(dir);
-    if (!seg || seg.breached) return;
+    if (!seg) {
+      this.game.events.emit('keepward-toast', 'Missed the wall');
+      return;
+    }
+    if (seg.rebuilding) {
+      this.game.events.emit('keepward-toast', 'Wall rebuilding…');
+      return;
+    }
+
+    // Rebuild destroyed segment
+    if (seg.breached) {
+      const cost = TUNING.rebuild;
+      if (this.wood < cost.wood || this.gold < cost.gold) {
+        this.game.events.emit('keepward-toast', `Need ${cost.wood}W+${cost.gold}G to rebuild`);
+        audio.play('deny');
+        return;
+      }
+      this.wood -= cost.wood;
+      this.gold -= cost.gold;
+      seg.beginRebuild();
+      this.game.events.emit('keepward-toast', 'Rebuilding wall…');
+      audio.play('place');
+      this.emitHud();
+      const stone =
+        this.fort.stoneFaced || this.age === 'castle' || this.age === 'imperial';
+      this.time.delayedCall(TUNING.rebuild.placeMs, () => {
+        if (!seg || !this.sys.settings.active) return;
+        // Segment may have been destroyed on restart
+        if (!this.fort.segments.has(dir)) return;
+        const maxHp = this.fort.baselineForAge(this.age);
+        seg.finishRebuild(maxHp, stone);
+        this.game.events.emit('keepward-toast', 'Rebuilt wall');
+        audio.play('upgrade');
+        this.emitHud();
+      });
+      return;
+    }
+
     const now = this.time.now;
+    if (seg.hp >= seg.maxHp - 0.01) {
+      this.game.events.emit('keepward-toast', 'Wall at full HP');
+      return;
+    }
     if (!seg.canRepair(now)) {
       if (now - seg.lastHitAt < TUNING.repair.lockMs) {
         this.game.events.emit('keepward-toast', 'Wall under fire');
+      } else {
+        this.game.events.emit('keepward-toast', 'Cannot repair now');
       }
       return;
     }
     const result = seg.repairChunk(this.age);
-    if (!result) return;
+    if (!result) {
+      this.game.events.emit('keepward-toast', 'Cannot repair now');
+      return;
+    }
     if (this.wood < result.wood || this.gold < result.gold) {
       seg.hp -= result.healed;
       seg.redraw(this.fort.stoneFaced);
@@ -854,9 +912,13 @@ export class GameScene extends Phaser.Scene {
         const tint =
           tower.towerId === 'mangonel'
             ? Palette.feudal
-            : tower.towerId === 'keep'
-              ? Palette.stoneLight
-              : Palette.ochre;
+            : tower.towerId === 'spearPost'
+              ? Palette.ochreDark
+              : tower.towerId === 'longbow'
+                ? Palette.grassLight
+                : tower.towerId === 'keep'
+                  ? Palette.stoneLight
+                  : Palette.ochre;
         p.fire(
           tower.x,
           tower.y - 10,
@@ -954,8 +1016,13 @@ export class GameScene extends Phaser.Scene {
 
   private damageEnemy(e: EnemyUnit, dmg: number, killer: TowerUnit | null): void {
     if (!e.alive) return;
+    let finalDmg = dmg;
+    if (killer && killer.towerId === 'spearPost' && isCavalry(e.enemyId)) {
+      const mult = TOWERS.spearPost.vsCavalryMult ?? 2;
+      finalDmg = dmg * mult;
+    }
     this.fx.hitFlash(e);
-    const killed = e.takeDamage(dmg);
+    const killed = e.takeDamage(finalDmg);
     if (killed) {
       const gx = e.x;
       const gy = e.y;

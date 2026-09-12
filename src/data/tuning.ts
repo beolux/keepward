@@ -1,6 +1,6 @@
 /**
- * Ideas Guy balance sheet — drop-in numbers for Keepward fort siege.
- * Do not invent alternate values; change here when Ideas Guy updates.
+ * Keepward fort-siege balance — `TUNING.md` documents Nick walls2 overrides.
+ * Wall HP (2×) + wall DPS pin + rebuild + Spear Post / Longbow are locked.
  */
 
 export const TILE_PX = 40;
@@ -33,10 +33,10 @@ export const TUNING = {
 
   /** Wall HP baseline per segment by age (age-up applies rules in FortSystem). */
   wallHpByAge: {
-    dark: 80,
-    feudal: 140,
-    castle: 260,
-    imperial: 400,
+    dark: 160,
+    feudal: 280,
+    castle: 520,
+    imperial: 800,
   } as Record<string, number>,
 
   /** Repair: cost per 40 HP chunk; blocked for repairLockMs after taking damage. */
@@ -45,6 +45,14 @@ export const TUNING = {
     darkFeudal: { wood: 25, gold: 10 },
     castleImperial: { wood: 40, gold: 20 },
     lockMs: 500,
+  },
+
+  /** Rebuild a destroyed (BREACH) segment — Nick sheet */
+  rebuild: {
+    wood: 80,
+    gold: 40,
+    /** Channel / place time before wall returns */
+    placeMs: 2000,
   },
 
   /** Global wall upgrades (2 purchaseable steps; Imperial baseline from age-up only). */
@@ -63,8 +71,8 @@ export const TUNING = {
       age: 'castle' as const,
       costWood: 180,
       costGold: 120,
-      /** Sets stone baseline 260, or +120 if already hardened */
-      stoneBaseline: 260,
+      /** Sets stone baseline (= castle HP), or +120 if already hardened */
+      stoneBaseline: 520,
       hardenedBonus: 120,
     },
   },
@@ -102,6 +110,27 @@ export const TUNING = {
       costGold: 55,
       projectileSpeed: 260,
     },
+    /** Feudal — Spearmen post; +100% vs cavalry (knight) */
+    spearPost: {
+      damage: 5,
+      fireRatePerSec: 0.8,
+      rangeTiles: 2.0,
+      splashTiles: 0,
+      costWood: 50,
+      costGold: 28,
+      projectileSpeed: 340,
+      vsCavalryMult: 2.0,
+    },
+    /** Feudal — long range single-target */
+    longbow: {
+      damage: 8,
+      fireRatePerSec: 0.7,
+      rangeTiles: 3.2,
+      splashTiles: 0,
+      costWood: 60,
+      costGold: 40,
+      projectileSpeed: 420,
+    },
   },
 
   /** Ages */
@@ -113,16 +142,16 @@ export const TUNING = {
   },
   ageChannelMs: 4000,
 
-  /** Enemy wall DPS */
+  /** Enemy wall DPS — Ideas Guy pin (Nick walls2) */
   wallDps: {
     militia: 2,
     archer: 1,
     spearman: 3,
-    knight: 5,
-    ram: 18,
-    elephant: 12,
+    knight: 4,
+    ram: 10,
+    elephant: 7,
   } as Record<string, number>,
-  elephantSplashAdjacent: 0.4, // 40% splash to adjacent wall segments
+  elephantSplashAdjacent: 0.25, // 25% splash to adjacent wall segments
 
   /** Enemy combat stats (HP/speed not on sheet — tuned to sheet tower DPS; bounty IS sheet) */
   enemies: {
@@ -176,10 +205,10 @@ export const TUNING = {
     },
   },
 
-  /** Placement */
+  /** Placement — tighter so ~2× courtyard fits more towers */
   placement: {
-    towerRadius: 18,
-    keepClearance: 36,
+    towerRadius: 13,
+    keepClearance: 28,
     wallClearance: 8,
   },
 

@@ -96,7 +96,7 @@ export class FortSystem {
     const newBase = this.baselineForAge(next);
     const delta = newBase - oldBase;
     for (const seg of this.segments.values()) {
-      if (seg.breached) continue;
+      if (seg.breached || seg.rebuilding) continue;
       const wasFull = seg.hp >= seg.maxHp - 0.01;
       if (wasFull) {
         seg.hp = newBase;
@@ -139,7 +139,7 @@ export class FortSystem {
   damageWall(dir: WallDir, amount: number, now: number, splashAdj: boolean): WallDir[] {
     const breached: WallDir[] = [];
     const seg = this.segments.get(dir);
-    if (seg && !seg.breached) {
+    if (seg && !seg.breached && !seg.rebuilding) {
       if (seg.takeDamage(amount, now)) breached.push(dir);
       seg.redraw(this.stoneFaced);
     }
@@ -147,7 +147,7 @@ export class FortSystem {
       const splash = amount * TUNING.elephantSplashAdjacent;
       for (const adj of WALL_ADJACENT[dir]) {
         const a = this.segments.get(adj);
-        if (a && !a.breached) {
+        if (a && !a.breached && !a.rebuilding) {
           if (a.takeDamage(splash, now)) breached.push(adj);
           a.redraw(this.stoneFaced);
         }

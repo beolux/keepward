@@ -2,9 +2,9 @@
 
 Medieval fort-siege tower defense — hold the keep. Portrait mobile-first PWA.
 
-**Play:** https://beolux.github.io/keepward/?v=placefix2
+**Play:** https://beolux.github.io/keepward/?v=walls2
 
-Hard-refresh / open with `?v=placefix2` if a prior build left a stuck service worker.
+Hard-refresh / open with `?v=walls2` if a prior build left a stuck service worker.
 
 ## Stack
 
@@ -23,7 +23,7 @@ npm run build
 ## How to play
 
 1. Pick a fort layout (square / wide / tall).
-2. **Build phase** before each wave: place/upgrade towers, tap walls to repair, watch the **incoming side** tell.
+2. **Build phase** before each wave: place/upgrade towers, tap walls to repair, tap **BREACH** to rebuild, watch the **incoming side** tell.
 3. Thumb **Start Wave** (or wait for countdown) — enemies then bash walls → breach → hunt the Keep (Keep HP 1000).
 4. **Hold a dock tower and drag** into the courtyard — live green/red range ghost; lift to place, drag-off to cancel.
 5. Tap a tower for the thumb sheet: kill-gated upgrades + Sell / Undo.

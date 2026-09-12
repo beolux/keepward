@@ -110,3 +110,8 @@ export function eliteStats(base: EnemyDef): Pick<EnemyDef, 'hp' | 'wallDps' | 'r
     rewardGold: Math.round(base.rewardGold * 1.5),
   };
 }
+
+/** Knight (and similar) count as cavalry for Spear Post bonus */
+export function isCavalry(id: EnemyId): boolean {
+  return id === 'knight';
+}

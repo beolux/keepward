@@ -23,23 +23,25 @@ const playH = GAME_H - HUD_TOP - HUD_BOTTOM;
 const cx = GAME_W / 2;
 const cy = HUD_TOP + playH / 2;
 
+/** Courtyards scaled ~√2 so interior placeable area ≈2× (still 8 segments). */
 export const FORT_LAYOUTS: Record<LayoutId, FortLayout> = {
   square: {
     id: 'square',
     name: 'Square Keep',
-    courtyard: { x: cx - 110, y: cy - 130, w: 220, h: 260 },
+    courtyard: { x: cx - 155, y: cy - 184, w: 310, h: 368 },
     wallThickness: 18,
   },
   wide: {
     id: 'wide',
     name: 'Wide Bailey',
-    courtyard: { x: cx - 130, y: cy - 100, w: 260, h: 200 },
-    wallThickness: 18,
+    // Cap width so walls stay on-canvas (390 - margins)
+    courtyard: { x: cx - 162, y: cy - 140, w: 324, h: 280 },
+    wallThickness: 16,
   },
   tall: {
     id: 'tall',
     name: 'Tall Ward',
-    courtyard: { x: cx - 90, y: cy - 160, w: 180, h: 320 },
+    courtyard: { x: cx - 127, y: cy - 226, w: 254, h: 452 },
     wallThickness: 18,
   },
 };

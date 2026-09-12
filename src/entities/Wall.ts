@@ -11,6 +11,8 @@ export class WallSegment {
   maxHp: number;
   breached = false;
   lastHitAt = 0;
+  /** True while rebuild channel is running */
+  rebuilding = false;
   gfx: Phaser.GameObjects.Graphics;
   hpText: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
@@ -44,13 +46,30 @@ export class WallSegment {
       .setAlpha(0);
 
     const r = def.rect;
-    // ≥44pt hit targets for thumb repair
+    // Pad ~12px, min 56pt hit targets for thumb repair/rebuild
+    const pad = 12;
+    const hw = Math.max(r.w + pad * 2, 56);
+    const hh = Math.max(r.h + pad * 2, 56);
     this.hitZone = scene.add
-      .zone(r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, 44), Math.max(r.h, 44))
+      .zone(r.x + r.w / 2, r.y + r.h / 2, hw, hh)
       .setInteractive({ useHandCursor: true })
       .setDepth(17);
 
     this.redraw();
+  }
+
+  /** Axis-aligned padded bounds of the wall hit target (world space) */
+  hitBounds(): { x: number; y: number; w: number; h: number } {
+    const r = this.def.rect;
+    const pad = 12;
+    const w = Math.max(r.w + pad * 2, 56);
+    const h = Math.max(r.h + pad * 2, 56);
+    return { x: r.x + r.w / 2 - w / 2, y: r.y + r.h / 2 - h / 2, w, h };
+  }
+
+  containsPoint(x: number, y: number): boolean {
+    const b = this.hitBounds();
+    return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
   }
 
   redraw(stone = false): void {
@@ -58,11 +77,27 @@ export class WallSegment {
     const g = this.gfx;
     g.clear();
     const r = this.def.rect;
+    if (this.rebuilding) {
+      g.fillStyle(Palette.wood, 0.55);
+      g.fillRect(r.x, r.y, r.w, r.h);
+      g.lineStyle(3, Palette.gold, 0.95);
+      g.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      this.hpText.setText('BUILD…');
+      this.hpText.setColor('#D4A84B');
+      this.hpText.setAlpha(1);
+      this.drawIncomingGlow();
+      return;
+    }
     if (this.breached) {
       g.fillStyle(Palette.breach, 0.85);
       g.fillRect(r.x, r.y, r.w, r.h);
       g.lineStyle(1, Palette.dirtDark, 0.6);
       g.strokeRect(r.x, r.y, r.w, r.h);
+      // Gold outline on breaches during build phase (rebuild affordance)
+      if (this.buildHint) {
+        g.lineStyle(3, Palette.gold, 0.95);
+        g.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      }
       this.hpText.setText('BREACH');
       this.hpText.setColor('#E08080');
       this.hpText.setAlpha(1);
@@ -93,7 +128,7 @@ export class WallSegment {
   private drawIncomingGlow(): void {
     const g = this.incomingGlow;
     g.clear();
-    if (!this.incoming || this.breached) {
+    if (!this.incoming || this.breached || this.rebuilding) {
       g.setAlpha(0);
       return;
     }
@@ -110,7 +145,7 @@ export class WallSegment {
     this.incoming = on;
     this.drawIncomingGlow();
     this.scene.tweens.killTweensOf(this.incomingGlow);
-    if (on) {
+    if (on && !this.breached && !this.rebuilding) {
       this.incomingGlow.setAlpha(0.55);
       this.scene.tweens.add({
         targets: this.incomingGlow,
@@ -125,22 +160,22 @@ export class WallSegment {
     }
   }
 
-  /** Keep HP visible + gold outline on damaged walls during build */
+  /** Keep HP visible + gold outline on damaged / breached walls during build */
   setBuildRepairHint(on: boolean): void {
     this.buildHint = on;
     this.redraw(this.stone);
-    if (on && !this.breached && this.hp < this.maxHp) {
+    if (on && (this.breached || (!this.breached && this.hp < this.maxHp))) {
       this.hpText.setAlpha(1);
       this.hpHideEvent?.remove(false);
       this.hpHideEvent = undefined;
-    } else if (!this.breached && !on) {
+    } else if (!this.breached && !on && !this.rebuilding) {
       this.hpText.setAlpha(0);
     }
   }
 
   /** Show HP briefly after damage (or repair) */
   showHpBrief(ms = 900): void {
-    if (this.breached) {
+    if (this.breached || this.rebuilding) {
       this.hpText.setAlpha(1);
       return;
     }
@@ -149,14 +184,14 @@ export class WallSegment {
     // Stay visible while build hint is on
     if (this.buildHint && this.hp < this.maxHp) return;
     this.hpHideEvent = this.scene.time.delayedCall(ms, () => {
-      if (!this.breached && !(this.buildHint && this.hp < this.maxHp)) {
+      if (!this.breached && !this.rebuilding && !(this.buildHint && this.hp < this.maxHp)) {
         this.hpText.setAlpha(0);
       }
     });
   }
 
   takeDamage(amount: number, now: number): boolean {
-    if (this.breached) return false;
+    if (this.breached || this.rebuilding) return false;
     this.hp -= amount;
     this.lastHitAt = now;
     if (this.hp <= 0) {
@@ -172,10 +207,16 @@ export class WallSegment {
   }
 
   canRepair(now: number): boolean {
-    return !this.breached && now - this.lastHitAt >= TUNING.repair.lockMs && this.hp < this.maxHp;
+    return (
+      !this.breached &&
+      !this.rebuilding &&
+      now - this.lastHitAt >= TUNING.repair.lockMs &&
+      this.hp < this.maxHp
+    );
   }
 
   repairChunk(age: AgeId): { wood: number; gold: number; healed: number } | null {
+    if (this.breached || this.rebuilding) return null;
     const chunk = Math.min(TUNING.repair.chunkHp, this.maxHp - this.hp);
     if (chunk <= 0) return null;
     const cost =
@@ -186,6 +227,24 @@ export class WallSegment {
     this.redraw(this.stone);
     this.showHpBrief(1200);
     return { wood: cost.wood, gold: cost.gold, healed: chunk };
+  }
+
+  /** Begin rebuild channel (caller pays cost). Completes via finishRebuild. */
+  beginRebuild(): void {
+    if (!this.breached || this.rebuilding) return;
+    this.rebuilding = true;
+    this.redraw(this.stone);
+  }
+
+  /** Restore full HP at current age baseline after rebuild channel */
+  finishRebuild(maxHp: number, stone: boolean): void {
+    this.rebuilding = false;
+    this.breached = false;
+    this.maxHp = maxHp;
+    this.hp = maxHp;
+    this.lastHitAt = 0;
+    this.redraw(stone);
+    this.showHpBrief(1400);
   }
 
   destroy(): void {

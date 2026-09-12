@@ -23,21 +23,21 @@ export const AGES: Record<AgeId, AgeDef> = {
     name: 'Feudal Age',
     costWood: TUNING.ages.feudal.costWood,
     costGold: TUNING.ages.feudal.costGold,
-    unlocks: ['watchtower', 'mangonel'],
+    unlocks: ['watchtower', 'mangonel', 'spearPost', 'longbow'],
   },
   castle: {
     id: 'castle',
     name: 'Castle Age',
     costWood: TUNING.ages.castle.costWood,
     costGold: TUNING.ages.castle.costGold,
-    unlocks: ['watchtower', 'mangonel'],
+    unlocks: ['watchtower', 'mangonel', 'spearPost', 'longbow'],
   },
   imperial: {
     id: 'imperial',
     name: 'Imperial Age',
     costWood: TUNING.ages.imperial.costWood,
     costGold: TUNING.ages.imperial.costGold,
-    unlocks: ['watchtower', 'mangonel'],
+    unlocks: ['watchtower', 'mangonel', 'spearPost', 'longbow'],
   },
 };
 

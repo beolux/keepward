@@ -78,6 +78,31 @@ export class TowerUnit extends Phaser.GameObjects.Container {
       g.fillCircle(0, 2, 4);
       return;
     }
+    if (id === 'spearPost') {
+      // Geometric stake / spear rack
+      g.fillStyle(def.color, 1);
+      g.fillRoundedRect(-12, 0, 24, 16, 2);
+      g.fillStyle(def.accent, 1);
+      g.fillTriangle(-8, 2, -4, -22, 0, 2);
+      g.fillTriangle(-2, 2, 2, -26, 6, 2);
+      g.fillTriangle(4, 2, 8, -20, 12, 2);
+      g.fillStyle(Palette.dirtDark, 1);
+      g.fillRect(-14, 14, 28, 4);
+      return;
+    }
+    if (id === 'longbow') {
+      // Tall slender archer loft
+      g.fillStyle(def.color, 1);
+      g.fillRect(-8, -6, 16, 26);
+      g.fillStyle(def.accent, 1);
+      g.fillRoundedRect(-12, -18, 24, 14, 3);
+      g.lineStyle(2, Palette.ochreDark, 1);
+      g.strokeCircle(0, -12, 6);
+      g.fillStyle(Palette.slate, 1);
+      g.fillRect(6, -14, 10, 2);
+      return;
+    }
+    // mangonel (default siege nest)
     g.fillStyle(def.color, 1);
     g.fillRoundedRect(-14, -4, 28, 22, 3);
     g.fillStyle(def.accent, 1);
@@ -237,6 +262,14 @@ export class PlacementGhost {
       this.gfx.fillRect(x - 10, y - 8, 20, 28);
       this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
       this.gfx.fillTriangle(x, y - 28, x - 14, y - 6, x + 14, y - 6);
+    } else if (this.towerId === 'spearPost') {
+      this.gfx.fillRoundedRect(x - 12, y, 24, 16, 2);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
+      this.gfx.fillTriangle(x - 2, y + 2, x + 2, y - 26, x + 6, y + 2);
+    } else if (this.towerId === 'longbow') {
+      this.gfx.fillRect(x - 8, y - 6, 16, 26);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
+      this.gfx.fillRoundedRect(x - 12, y - 18, 24, 14, 3);
     } else {
       this.gfx.fillRoundedRect(x - 14, y - 4, 28, 22, 3);
       this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
@@ -244,7 +277,7 @@ export class PlacementGhost {
     }
     // validity ring around ghost body
     this.gfx.lineStyle(2, color, 0.9);
-    this.gfx.strokeCircle(x, y, 18);
+    this.gfx.strokeCircle(x, y, 16);
   }
 
   hide(): void {
