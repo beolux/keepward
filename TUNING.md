@@ -4,8 +4,8 @@
 
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
-## Nick override (dmg2)
-Watchtower 8→12 · Longbow 11→16 starting damage (other towers / walls / place-freeze / spread untouched).
+## Nick override (early1)
+Soft early waves 1–6 (exact counts); knights from w6; first elite w10; w7–11 −25% counts. Enemy HP / tower dmg / walls / place-freeze / w12+ untouched (dmg2 towers still in).
 
 ## Fort
 - 8 wall segments: N/NE/E/SE/S/SW/W/NW
@@ -53,7 +53,7 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 4 · Ram 10 · Elephant 7 (+25% ad
 - Keep HP 1000 · auto 3 dmg @ 0.5/s
 
 ## Waves
-50 waves. Knights w5 · Rams w12 · elite every 5 · Elephant boss w50.
+50 waves. Knights w6 · Rams w12 · elite every 5 from w10 · Elephant boss w50.
 
 ## Enemy HP / speed (not on combat DPS sheet)
 See `TUNING.enemies` in `tuning.ts`. Wall DPS + bounties are sheet-pinned.
