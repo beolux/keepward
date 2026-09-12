@@ -6,7 +6,17 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-registerSW({ immediate: true });
+// placefix2 — force SW bump so iOS clients leave the frozen build
+registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    // Auto-reload when a new service worker claims the page
+    location.reload();
+  },
+  onOfflineReady() {
+    /* ok */
+  },
+});
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

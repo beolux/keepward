@@ -164,13 +164,15 @@ export class FxSystem {
 
   placePop(x: number, y: number): void {
     if (!this.canSpawn(1)) return;
-    const r = this.scene.add.circle(x, y, 6, Palette.rangeOk, 0.5).setDepth(50);
+    // Tween scale/alpha — Phaser circle radius tween is unreliable on mobile
+    const r = this.scene.add.circle(x, y, 14, Palette.rangeOk, 0.5).setDepth(50).setScale(0.4);
     this.track(r, 280);
     this.scene.tweens.add({
       targets: r,
-      radius: 28,
+      scale: 2,
       alpha: 0,
       duration: 260,
+      ease: 'Quad.easeOut',
     });
   }
 

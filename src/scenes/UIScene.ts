@@ -319,12 +319,17 @@ export class UIScene extends Phaser.Scene {
     if (!this.dockDragId) return;
     const id = this.dockDragId;
     this.dockDragId = null;
+    // Same lift must NOT arm Start Wave (finger often ends over the button)
+    this.startWaveArmed = false;
+    this.startWaveBtn.setScale(1);
     this.clearDockPress(id);
     this.gameScene.endDockPlace(ptr.x, ptr.y);
   };
 
   /** touchcancel / finger left canvas — must release drag or input stays dead */
   private onGlobalCancel = (): void => {
+    this.startWaveArmed = false;
+    this.startWaveBtn.setScale(1);
     if (!this.dockDragId) {
       this.gameScene.cancelDockDrag();
       return;
@@ -453,7 +458,7 @@ export class UIScene extends Phaser.Scene {
       if (!this.overlay) this.showOverlay('VICTORY', 'The keep stands strong!', false);
     } else if (state.status === 'lost') {
       if (!this.overlay) this.showOverlay('DEFEAT', 'The keep has fallen…', false);
-    } else {
+    } else if (this.overlay) {
       this.clearOverlay();
     }
   };

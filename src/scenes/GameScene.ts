@@ -104,6 +104,8 @@ export class GameScene extends Phaser.Scene {
   private dockDragging = false;
   /** Ignore tower taps right after place (same touch / iOS synthetic click) */
   private placeTapIgnoreUntil = 0;
+  /** Suppress GameScene pointerup while a dock-drag gesture owns the finger */
+  private ignoreGamePointerUpUntil = 0;
   private teachMsg: string | null = null;
   private taught = false;
 
@@ -148,6 +150,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnEdgeIndex = 0;
     this.pointerDown = false;
     this.dockDragging = false;
+    this.placeTapIgnoreUntil = 0;
+    this.ignoreGamePointerUpUntil = 0;
     this.keepHpVisibleUntil = 0;
 
     try {
@@ -289,6 +293,8 @@ export class GameScene extends Phaser.Scene {
     this.placing = true;
     this.dockDragging = true;
     this.pointerDown = true;
+    // Block GameScene global pointerup for the whole dock gesture (+ release race)
+    this.ignoreGamePointerUpUntil = this.time.now + 60_000;
     this.ghost.setTower(id);
     this.updateGhost(x, y);
     this.emitHud();
@@ -301,23 +307,32 @@ export class GameScene extends Phaser.Scene {
 
   endDockPlace(x: number, y: number): void {
     if (!this.placing || !this.dockDragging) return;
+    // Force-release BEFORE any place side-effects (iOS input wedge)
     this.dockDragging = false;
     this.pointerDown = false;
+    this.placing = false;
+    this.ghost.hide();
+    this.ignoreGamePointerUpUntil = this.time.now + 150;
+    this.forceReleasePointers();
     if (this.paused || this.status !== 'playing') {
-      this.cancelPlace();
+      this.emitHud();
       return;
     }
     // Drag-off cancel: release in dock/top chrome
     if (!this.inPlayfield(x, y)) {
-      this.cancelPlace();
-      audio.play('deny');
+      this.time.delayedCall(0, () => {
+        audio.play('deny');
+        this.emitHud();
+      });
       return;
     }
     const ok = this.tryPlace(x, y);
-    this.ghost.hide();
-    this.placing = false;
-    if (!ok) audio.play('deny');
-    this.emitHud();
+    if (!ok) {
+      this.time.delayedCall(0, () => {
+        audio.play('deny');
+        this.emitHud();
+      });
+    }
   }
 
   private cancelPlace(): void {
@@ -325,7 +340,22 @@ export class GameScene extends Phaser.Scene {
     this.placing = false;
     this.dockDragging = false;
     this.pointerDown = false;
+    this.ignoreGamePointerUpUntil = this.time.now + 100;
+    this.forceReleasePointers();
     this.emitHud();
+  }
+
+  /** Safe Phaser 3 pointer reset — clears stuck active touch after mid-up Zone spawn */
+  private forceReleasePointers(): void {
+    try {
+      const mgr = this.input?.manager;
+      if (!mgr?.pointers) return;
+      for (const p of mgr.pointers) {
+        if (p && typeof p.reset === 'function') p.reset();
+      }
+    } catch {
+      /* ignore — defensive only */
+    }
   }
 
   /** UIScene calls this on touchcancel / gameout so drag never sticks */
@@ -360,27 +390,39 @@ export class GameScene extends Phaser.Scene {
   };
 
   private onPointerUp = (pointer: Phaser.Input.Pointer): void => {
-    if (this.dockDragging) return;
+    // Dock gesture owns this finger — UIScene.endDockPlace handles place
+    if (this.dockDragging || this.time.now < this.ignoreGamePointerUpUntil) {
+      this.pointerDown = false;
+      return;
+    }
     if (!this.placing) {
       this.pointerDown = false;
       return;
     }
+    // Force-release BEFORE place side-effects
     this.pointerDown = false;
+    this.placing = false;
+    this.ghost.hide();
+    this.forceReleasePointers();
     if (this.paused || this.status !== 'playing') {
-      this.cancelPlace();
+      this.emitHud();
       return;
     }
     // Lift to commit; drag-off / HUD cancel
     if (!this.inPlayfield(pointer.x, pointer.y)) {
-      this.cancelPlace();
-      audio.play('deny');
+      this.time.delayedCall(0, () => {
+        audio.play('deny');
+        this.emitHud();
+      });
       return;
     }
     const ok = this.tryPlace(pointer.x, pointer.y);
-    this.ghost.hide();
-    this.placing = false;
-    if (!ok) audio.play('deny');
-    this.emitHud();
+    if (!ok) {
+      this.time.delayedCall(0, () => {
+        audio.play('deny');
+        this.emitHud();
+      });
+    }
   };
 
   private updateGhost(x: number, y: number): void {
@@ -412,15 +454,22 @@ export class GameScene extends Phaser.Scene {
       this.game.events.emit('keepward-toast', 'Place inside the courtyard');
       return false;
     }
+    // Flags already cleared by caller; belt-and-suspenders before Zone exists
+    this.placing = false;
+    this.dockDragging = false;
+    this.pointerDown = false;
+    this.forceReleasePointers();
+
     this.wood -= def.costWood;
     this.gold -= def.costGold;
     const tower = new TowerUnit(this, x, y, this.selectedTower);
-    // Do not attach tap handler until after this gesture ends — iOS often
-    // delivers the same touchend / a synthetic click onto the new hitZone.
-    this.placeTapIgnoreUntil = this.time.now + 400;
-    this.time.delayedCall(350, () => {
+    // Never selectPlacedTower from the place path — that armed interactives
+    // under the active finger and wedged iOS Safari.
+    this.placeTapIgnoreUntil = this.time.now + 450;
+    // enableTap ONLY after place gesture fully ends (≥400ms)
+    this.time.delayedCall(420, () => {
       if (!tower.active) return;
-      tower.setTapHandler(() => this.selectPlacedTower(tower));
+      tower.enableTap(() => this.selectPlacedTower(tower));
     });
     tower.showRange(true);
     this.time.delayedCall(500, () => {
@@ -428,10 +477,16 @@ export class GameScene extends Phaser.Scene {
     });
     this.towers.push(tower);
     this.lastPlaced = tower;
-    this.fx.placePop(x, y);
-    audio.play('place');
     this.completeTeach();
-    this.emitHud();
+    // Defer HUD / audio / FX / toast OFF the pointerup stack
+    const px = x;
+    const py = y;
+    this.time.delayedCall(0, () => {
+      this.fx.placePop(px, py);
+      audio.play('place');
+      this.emitHud();
+      this.game.events.emit('keepward-toast', 'placed ok');
+    });
     return true;
   }
 

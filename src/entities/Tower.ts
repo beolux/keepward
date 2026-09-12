@@ -42,8 +42,9 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     this.drawRange(false);
     this.setDepth(25);
 
-    // ≥44pt hit target
-    this.hitZone = scene.add.zone(0, 0, 48, 48).setInteractive({ useHandCursor: true });
+    // ≥44pt hit target — NOT interactive yet.
+    // setInteractive mid-pointerup under the active finger freezes iOS Safari+Phaser.
+    this.hitZone = scene.add.zone(0, 0, 48, 48);
     this.add(this.hitZone);
 
     scene.add.existing(this);
@@ -181,9 +182,16 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     return best;
   }
 
-  setTapHandler(fn: () => void): void {
+  /** Call only AFTER place gesture ends (≥400ms). Keep never needs this. */
+  enableTap(fn: () => void): void {
+    this.hitZone.setInteractive({ useHandCursor: true });
     this.hitZone.off('pointerup');
     this.hitZone.on('pointerup', fn);
+  }
+
+  /** @deprecated use enableTap — kept for call-site migration safety */
+  setTapHandler(fn: () => void): void {
+    this.enableTap(fn);
   }
 
   destroyTower(): void {
