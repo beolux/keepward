@@ -184,6 +184,19 @@ export const TUNING = {
   },
 
   waveCount: 50,
+
+  /**
+   * Build phase between waves (Nick): place/upgrade/repair window.
+   * Not on Ideas Guy combat sheet — UX timing only.
+   */
+  buildPhase: {
+    /** Seconds before waves 1–20 */
+    earlySec: 13,
+    /** Seconds after wave 20 (shorter late-game) */
+    lateSec: 10,
+    /** Upcoming wave number (1-based) at which late timer applies */
+    lateFromWave: 21,
+  },
 } as const;
 
 export type WallUpgradeId = 'hardenedTimbers' | 'stoneFacing';

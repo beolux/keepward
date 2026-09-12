@@ -21,10 +21,11 @@ npm run build
 ## How to play
 
 1. Pick a fort layout (square / wide / tall).
-2. **Hold a dock tower and drag** into the courtyard — live green/red range ghost; lift to place, drag-off to cancel.
-3. Enemies bash walls → breach → hunt the Keep (Keep HP 1000).
-4. Tap a tower for the thumb sheet: kill-gated upgrades + Sell / Undo.
-5. Age Dark → Feudal → Castle → Imperial. Survive **50 waves**.
+2. **Build phase** before each wave: place/upgrade towers, tap walls to repair, watch the **incoming side** tell.
+3. Thumb **Start Wave** (or wait for countdown) — enemies then bash walls → breach → hunt the Keep (Keep HP 1000).
+4. **Hold a dock tower and drag** into the courtyard — live green/red range ghost; lift to place, drag-off to cancel.
+5. Tap a tower for the thumb sheet: kill-gated upgrades + Sell / Undo.
+6. Age Dark → Feudal → Castle → Imperial. Survive **50 waves**.
 
 ## Feel
 

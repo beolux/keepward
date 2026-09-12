@@ -50,3 +50,9 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 5 · Ram 18 · Elephant 12 (+40% a
 
 ## Enemy HP / speed (not on sheet — local until Ideas Guy overrides)
 See `TUNING.enemies` in `tuning.ts`. Bounties and wall DPS are sheet-exact.
+
+## Build phase (UX — not Ideas Guy combat sheet)
+- Before wave 1 and between waves: build window (place / upgrade / repair)
+- Timer: 13s waves 1–20, 10s from wave 21+
+- Thumb **Start Wave** skips timer
+- Incoming-side tell: glow + chevron + dust on next spawn edge

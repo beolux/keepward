@@ -54,6 +54,12 @@ export type GameHudState = {
   wallUpgradeAvailable: 'hardenedTimbers' | 'stoneFacing' | null;
   muted: boolean;
   teach: string | null;
+  /** True while player can place/repair before next wave */
+  buildPhase: boolean;
+  /** Seconds left in build countdown (ceil) */
+  buildCountdownSec: number;
+  /** Next wave spawn edge — shown during build */
+  nextEdge: 'N' | 'E' | 'S' | 'W' | null;
 };
 
 export class GameScene extends Phaser.Scene {
@@ -99,6 +105,12 @@ export class GameScene extends Phaser.Scene {
   private teachMsg: string | null = null;
   private taught = false;
 
+  /** Incoming-side tell overlays (chevron + dust) */
+  private incomingChevron?: Phaser.GameObjects.Container;
+  private incomingDust?: Phaser.GameObjects.Graphics;
+  private dustTick = 0;
+  private dustMarks = 0;
+
   constructor() {
     super('Game');
   }
@@ -124,7 +136,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnQueue = [];
     this.waveAlive = 0;
     this.betweenWaves = true;
-    this.waveDelay = 1500;
+    this.waveDelay = this.buildDurationMsForUpcoming();
     this.placing = false;
     this.selectedPlaced = null;
     this.lastPlaced = null;
@@ -196,6 +208,7 @@ export class GameScene extends Phaser.Scene {
       this.input.off('pointerdown', this.onPointerDown, this);
       this.input.off('pointermove', this.onPointerMove, this);
       this.input.off('pointerup', this.onPointerUp, this);
+      this.hideIncomingTell();
       this.ghost.destroy();
       this.fx.destroy();
       this.fort.destroy();
@@ -203,6 +216,7 @@ export class GameScene extends Phaser.Scene {
 
     this.emitHud();
     this.game.events.emit('keepward-toast', `${this.fort.layout.name} — defend the courtyard`);
+    this.beginBuildPhaseVisuals();
   }
 
   private onHidden = (): void => {
@@ -510,7 +524,14 @@ export class GameScene extends Phaser.Scene {
     }
     this.wood -= result.wood;
     this.gold -= result.gold;
-    this.game.events.emit('keepward-toast', `Repaired +${result.healed} HP`);
+    const left = Math.ceil(seg.maxHp - seg.hp);
+    this.game.events.emit(
+      'keepward-toast',
+      left > 0
+        ? `Repaired +${result.healed} HP (${left} left)`
+        : `Wall fully repaired (+${result.healed})`,
+    );
+    audio.play('place');
     this.emitHud();
   }
 
@@ -607,12 +628,13 @@ export class GameScene extends Phaser.Scene {
       };
     }
 
+    const nextEdge = this.betweenWaves && this.waveIndex < WAVES.length ? this.peekNextEdge() : null;
     return {
       wood: Math.floor(this.wood),
       gold: Math.floor(this.gold),
       keepHp: Math.ceil(this.keepHp),
       keepMaxHp: TUNING.keep.hp,
-      wave: Math.min(this.waveIndex + (this.betweenWaves && this.waveIndex > 0 ? 0 : 1), WAVES.length) || 1,
+      wave: Math.min(this.waveIndex + 1, WAVES.length),
       maxWaves: WAVES.length,
       age: this.age,
       ageName: AGES[this.age].name,
@@ -633,6 +655,12 @@ export class GameScene extends Phaser.Scene {
       wallUpgradeAvailable,
       muted: audio.muted,
       teach: this.teachMsg,
+      buildPhase: this.betweenWaves && this.status === 'playing' && this.waveIndex < WAVES.length,
+      buildCountdownSec:
+        this.betweenWaves && this.waveIndex < WAVES.length
+          ? Math.max(0, Math.ceil(this.waveDelay / 1000))
+          : 0,
+      nextEdge,
     };
   }
 
@@ -665,8 +693,10 @@ export class GameScene extends Phaser.Scene {
 
     if (this.betweenWaves) {
       this.waveDelay -= dtMs;
+      this.tickIncomingDust(dt);
       if (this.waveDelay <= 0) {
         if (this.waveIndex >= WAVES.length) {
+          this.clearBuildPhaseVisuals();
           this.status = 'won';
           this.emitHud();
           audio.play('victory');
@@ -797,17 +827,22 @@ export class GameScene extends Phaser.Scene {
       this.gold += w.bonusGold;
       this.waveIndex++;
       this.betweenWaves = true;
-      this.waveDelay = 2200;
+      this.waveDelay = this.buildDurationMsForUpcoming();
       this.emitHud();
       if (this.waveIndex < WAVES.length) {
         this.game.events.emit(
           'keepward-toast',
-          `Wave ${this.waveIndex} cleared! +${w.bonusGold}g`,
+          `Wave ${this.waveIndex} cleared! +${w.bonusGold}g — rebuild`,
         );
+        this.beginBuildPhaseVisuals();
+      } else {
+        // Final wave cleared — brief pause then victory via betweenWaves timer
+        this.clearBuildPhaseVisuals();
       }
     }
 
-    if (Math.floor(_time / 250) !== Math.floor((_time - delta) / 250)) {
+    const hudInterval = this.betweenWaves ? 100 : 250;
+    if (Math.floor(_time / hudInterval) !== Math.floor((_time - delta) / hudInterval)) {
       this.emitHud();
     }
   }
@@ -866,7 +901,142 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Thumb Start Wave — skip remaining build timer */
+  startWaveNow(): void {
+    if (!this.betweenWaves || this.paused || this.status !== 'playing') return;
+    if (this.waveIndex >= WAVES.length) return;
+    this.waveDelay = 0;
+  }
+
+  private buildDurationMsForUpcoming(): number {
+    if (this.waveIndex >= WAVES.length) return 1200;
+    const upcoming = this.waveIndex + 1; // 1-based wave number
+    const sec =
+      upcoming >= TUNING.buildPhase.lateFromWave
+        ? TUNING.buildPhase.lateSec
+        : TUNING.buildPhase.earlySec;
+    return sec * 1000;
+  }
+
+  private peekNextEdge(): 'N' | 'E' | 'S' | 'W' {
+    if (this.waveIndex < WAVES.length) return WAVES[this.waveIndex].edge;
+    return SPAWN_EDGES[this.spawnEdgeIndex % 4];
+  }
+
+  private beginBuildPhaseVisuals(): void {
+    if (this.waveIndex >= WAVES.length) {
+      this.clearBuildPhaseVisuals();
+      return;
+    }
+    const edge = this.peekNextEdge();
+    this.fort.setIncomingEdge(edge);
+    this.fort.setBuildRepairHints(true);
+    this.showIncomingTell(edge);
+    this.emitHud();
+  }
+
+  private clearBuildPhaseVisuals(): void {
+    this.fort.setIncomingEdge(null);
+    this.fort.setBuildRepairHints(false);
+    this.hideIncomingTell();
+  }
+
+  private showIncomingTell(edge: 'N' | 'E' | 'S' | 'W'): void {
+    this.hideIncomingTell();
+    const c = this.fort.layout.courtyard;
+    const t = this.fort.layout.wallThickness;
+    let x = c.x + c.w / 2;
+    let y = c.y + c.h / 2;
+    let rot = 0;
+    const out = 36;
+    if (edge === 'N') {
+      x = c.x + c.w / 2;
+      y = c.y - t - out;
+      rot = Math.PI; // point down toward fort
+    } else if (edge === 'S') {
+      x = c.x + c.w / 2;
+      y = c.y + c.h + t + out;
+      rot = 0; // point up
+    } else if (edge === 'E') {
+      x = c.x + c.w + t + out;
+      y = c.y + c.h / 2;
+      rot = -Math.PI / 2; // point left
+    } else {
+      x = c.x - t - out;
+      y = c.y + c.h / 2;
+      rot = Math.PI / 2; // point right
+    }
+
+    const cont = this.add.container(x, y).setDepth(28);
+    // Large chevron readable at arm's length
+    const chev = this.add.graphics();
+    chev.fillStyle(Palette.gold, 0.95);
+    chev.fillTriangle(-22, -10, 22, -10, 0, 22);
+    chev.lineStyle(3, Palette.blood, 1);
+    chev.strokeTriangle(-22, -10, 22, -10, 0, 22);
+    chev.setRotation(rot);
+    const label = this.add
+      .text(0, edge === 'N' ? -28 : edge === 'S' ? 28 : 0, `INCOMING ${edge}`, {
+        fontSize: '14px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+        backgroundColor: '#8B3A3Acc',
+        padding: { x: 6, y: 3 },
+      })
+      .setOrigin(0.5);
+    if (edge === 'E') label.setPosition(-8, -30);
+    if (edge === 'W') label.setPosition(8, -30);
+    cont.add([chev, label]);
+    this.tweens.add({
+      targets: cont,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.incomingChevron = cont;
+    this.incomingDust = this.add.graphics().setDepth(12).setAlpha(0.7);
+    this.dustTick = 0;
+    this.dustMarks = 0;
+  }
+
+  private hideIncomingTell(): void {
+    if (this.incomingChevron) {
+      this.tweens.killTweensOf(this.incomingChevron);
+      this.incomingChevron.destroy(true);
+      this.incomingChevron = undefined;
+    }
+    if (this.incomingDust) {
+      this.incomingDust.destroy();
+      this.incomingDust = undefined;
+    }
+  }
+
+  /** Marching-dust preview outside the threatened wall */
+  private tickIncomingDust(dt: number): void {
+    if (!this.incomingDust || !this.betweenWaves) return;
+    this.dustTick += dt;
+    if (this.dustTick < 0.14) return;
+    this.dustTick = 0;
+    const edge = this.peekNextEdge();
+    const spawn = edgeSpawnPoints(edge);
+    const g = this.incomingDust;
+    if (this.dustMarks >= 24) {
+      g.clear();
+      this.dustMarks = 0;
+    }
+    const ox = spawn.x + (Math.random() - 0.5) * 48;
+    const oy = spawn.y + (Math.random() - 0.5) * 48;
+    g.fillStyle(Palette.dirt, 0.4 + Math.random() * 0.25);
+    g.fillCircle(ox, oy, 3 + Math.random() * 5);
+    this.dustMarks++;
+  }
+
   private startWave(wave: (typeof WAVES)[0]): void {
+    this.clearBuildPhaseVisuals();
     this.betweenWaves = false;
     this.spawning = true;
     this.spawnQueue = [];

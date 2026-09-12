@@ -34,6 +34,10 @@ export class UIScene extends Phaser.Scene {
   private channelBar!: Phaser.GameObjects.Graphics;
   private tipText!: Phaser.GameObjects.Text;
   private dockDragId: TowerId | null = null;
+  private startWaveBtn!: Phaser.GameObjects.Rectangle;
+  private startWaveLabel!: Phaser.GameObjects.Text;
+  private buildCountdownText!: Phaser.GameObjects.Text;
+  private incomingBanner!: Phaser.GameObjects.Text;
 
   constructor() {
     super('UI');
@@ -155,6 +159,62 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(101);
+
+    // Build phase: big thumb Start Wave (~56pt) + countdown + incoming banner
+    this.buildCountdownText = this.add
+      .text(GAME_W / 2, 72, '', {
+        fontSize: '18px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+        backgroundColor: '#1A2A22cc',
+        padding: { x: 10, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(120)
+      .setVisible(false);
+
+    this.incomingBanner = this.add
+      .text(GAME_W / 2, 102, '', {
+        fontSize: '16px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+        backgroundColor: '#8B3A3Acc',
+        padding: { x: 12, y: 5 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(120)
+      .setVisible(false);
+
+    const startY = GAME_H - 168;
+    this.startWaveBtn = this.add
+      .rectangle(GAME_W / 2, startY, 220, 56, Palette.ochre)
+      .setStrokeStyle(3, Palette.gold)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(130)
+      .setVisible(false);
+    this.startWaveLabel = this.add
+      .text(GAME_W / 2, startY, 'START WAVE', {
+        fontSize: '20px',
+        color: '#1A2A22',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(131)
+      .setVisible(false);
+    this.startWaveBtn.on('pointerdown', () => {
+      this.startWaveBtn.setScale(0.96);
+    });
+    this.startWaveBtn.on('pointerout', () => {
+      this.startWaveBtn.setScale(1);
+    });
+    this.startWaveBtn.on('pointerup', () => {
+      this.startWaveBtn.setScale(1);
+      audio.unlock();
+      this.gameScene.startWaveNow();
+    });
 
     this.toastText = this.add
       .text(GAME_W / 2, GAME_H * 0.36, '', {
@@ -326,7 +386,31 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.pauseLabel.setText(state.paused ? '▶' : '❚❚');
-    this.tipText.setVisible(!state.selectedPlaced);
+
+    const inBuild = state.buildPhase && !state.paused;
+    this.startWaveBtn.setVisible(inBuild && !state.selectedPlaced);
+    this.startWaveLabel.setVisible(inBuild && !state.selectedPlaced);
+    this.buildCountdownText.setVisible(inBuild);
+    this.incomingBanner.setVisible(inBuild && !!state.nextEdge);
+    if (inBuild) {
+      this.buildCountdownText.setText(`Build ${state.buildCountdownSec}s`);
+      if (state.nextEdge) {
+        const side =
+          state.nextEdge === 'N'
+            ? 'NORTH'
+            : state.nextEdge === 'S'
+              ? 'SOUTH'
+              : state.nextEdge === 'E'
+                ? 'EAST'
+                : 'WEST';
+        this.incomingBanner.setText(`⚔ Incoming ${side}`);
+      }
+      this.tipText.setText('Tap walls to repair · place towers · Start Wave');
+      this.tipText.setVisible(!state.selectedPlaced);
+    } else {
+      this.tipText.setText('Hold dock · drag to place · lift to commit');
+      this.tipText.setVisible(!state.selectedPlaced);
+    }
 
     this.updateBottomSheet(state);
     this.updateTeach(state);

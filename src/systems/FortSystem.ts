@@ -224,6 +224,31 @@ export class FortSystem {
     return true;
   }
 
+  /** Walls in hemisphere of a spawn edge (for incoming tell) */
+  wallsForEdge(edge: 'N' | 'E' | 'S' | 'W'): WallSegment[] {
+    return WALL_DIRS.filter((d) => {
+      if (edge === 'N') return d === 'N' || d === 'NE' || d === 'NW';
+      if (edge === 'S') return d === 'S' || d === 'SE' || d === 'SW';
+      if (edge === 'E') return d === 'E' || d === 'NE' || d === 'SE';
+      return d === 'W' || d === 'NW' || d === 'SW';
+    }).map((d) => this.segments.get(d)!);
+  }
+
+  /** Glow / clear incoming-side tell on wall segments */
+  setIncomingEdge(edge: 'N' | 'E' | 'S' | 'W' | null): void {
+    const hot = edge ? new Set(this.wallsForEdge(edge).map((s) => s.dir)) : new Set<WallDir>();
+    for (const seg of this.segments.values()) {
+      seg.setIncoming(hot.has(seg.dir));
+    }
+  }
+
+  /** Build-phase: keep damaged wall HP + gold outline visible for repair */
+  setBuildRepairHints(on: boolean): void {
+    for (const seg of this.segments.values()) {
+      seg.setBuildRepairHint(on);
+    }
+  }
+
   redrawAll(): void {
     for (const seg of this.segments.values()) {
       seg.redraw(this.stoneFaced);
