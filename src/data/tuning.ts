@@ -1,6 +1,6 @@
 /**
- * Keepward fort-siege balance — `TUNING.md` documents Nick walls2 overrides.
- * Wall HP (2×) + wall DPS pin + rebuild + Spear Post / Longbow are locked.
+ * Keepward fort-siege balance — `TUNING.md` documents Nick walls3 feel buff.
+ * Wall HP (~+20% over walls2) + wall DPS pin + rebuild + Spear Post / Longbow locked.
  */
 
 export const TILE_PX = 40;
@@ -33,10 +33,10 @@ export const TUNING = {
 
   /** Wall HP baseline per segment by age (age-up applies rules in FortSystem). */
   wallHpByAge: {
-    dark: 160,
-    feudal: 280,
-    castle: 520,
-    imperial: 800,
+    dark: 190,
+    feudal: 340,
+    castle: 620,
+    imperial: 960,
   } as Record<string, number>,
 
   /** Repair: cost per 40 HP chunk; blocked for repairLockMs after taking damage. */
@@ -72,7 +72,7 @@ export const TUNING = {
       costWood: 180,
       costGold: 120,
       /** Sets stone baseline (= castle HP), or +120 if already hardened */
-      stoneBaseline: 520,
+      stoneBaseline: 620,
       hardenedBonus: 120,
     },
   },

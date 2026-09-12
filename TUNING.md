@@ -4,8 +4,8 @@
 
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
-## Nick override (walls2)
-Wall durability + DPS pinned below — do not silently revert to older Ideas Guy HP/DPS.
+## Nick override (walls3)
+Nick +20% feel buff over walls2 lock (walls still fell a bit too fast). DPS unchanged.
 
 ## Fort
 - 8 wall segments: N/NE/E/SE/S/SW/W/NW
@@ -13,13 +13,13 @@ Wall durability + DPS pinned below — do not silently revert to older Ideas Guy
 - Free place anywhere inside courtyard (not walls/exterior/keep/towers)
 - Placement: towerRadius 13 · keepClearance 28
 
-## Wall HP by age (per segment) — 2× Nick
+## Wall HP by age (per segment) — walls3 (~+20% over walls2)
 | Age | HP |
 |-----|-----|
-| Dark | 160 |
-| Feudal | 280 |
-| Castle | 520 |
-| Imperial | 800 |
+| Dark | 190 |
+| Feudal | 340 |
+| Castle | 620 |
+| Imperial | 960 |
 
 Age-up: undamaged → new baseline; damaged → +Δ of tier jump.
 
@@ -28,8 +28,8 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 4 · Ram 10 · Elephant 7 (+25% ad
 
 ## Wall upgrades
 - Feudal Hardened Timbers: 120W+40G (+60 HP all)
-- Castle Stone Facing: 180W+120G (520 or +120 if hardened)
-- Imperial 800 from age-up only
+- Castle Stone Facing: 180W+120G (620 or +120 if hardened)
+- Imperial 960 from age-up only
 
 ## Repair / rebuild
 - Damaged: Dark/Feudal 25W+10G · Castle/Imperial 40W+20G per 40 HP
