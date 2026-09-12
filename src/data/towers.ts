@@ -43,7 +43,7 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     accent: 0xc4a35a,
     unlockAge: 'dark',
     buildable: true,
-    description: '8 dmg · 1.0/s',
+    description: '12 dmg · 1.0/s',
   },
   mangonel: {
     id: 'mangonel',
@@ -92,7 +92,7 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     accent: 0xc4a35a,
     unlockAge: 'feudal',
     buildable: true,
-    description: '11 dmg · 0.7/s · range 4.2',
+    description: '16 dmg · 0.7/s · range 4.2',
   },
   keep: {
     id: 'keep',

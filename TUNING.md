@@ -4,8 +4,8 @@
 
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
-## Nick override (dmg1)
-Watchtower 6→8 · Longbow 8→11 starting damage (other towers / walls / place-freeze / spread untouched).
+## Nick override (dmg2)
+Watchtower 8→12 · Longbow 11→16 starting damage (other towers / walls / place-freeze / spread untouched).
 
 ## Fort
 - 8 wall segments: N/NE/E/SE/S/SW/W/NW
@@ -38,10 +38,10 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 4 · Ram 10 · Elephant 7 (+25% ad
 - Tap wall to repair · Tap BREACH to rebuild (build phase gold outline)
 
 ## Towers
-- Watchtower (Dark): 8 dmg, 1.0/s, range 3.4
+- Watchtower (Dark): 12 dmg, 1.0/s, range 3.4
 - Mangonel (Feudal): 14 splash r=0.8, 0.35/s, range 3.0
 - **Spear Post (Feudal):** 5 dmg, 0.8/s, range 2.0, +100% vs cavalry (knight)
-- **Longbow Tower (Feudal):** 11 dmg, 0.7/s, range 4.2
+- **Longbow Tower (Feudal):** 16 dmg, 0.7/s, range 4.2
 - Kill gates: 8 / 20 / 40 cumulative
 - Tracks: RoF +12/12/16% · Range +10%×3 · Dmg +15/15/20%
 

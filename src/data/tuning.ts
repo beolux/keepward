@@ -93,7 +93,7 @@ export const TUNING = {
   /** Base towers (range in tiles) */
   towers: {
     watchtower: {
-      damage: 8,
+      damage: 12,
       fireRatePerSec: 1.0,
       rangeTiles: 3.4,
       splashTiles: 0,
@@ -123,7 +123,7 @@ export const TUNING = {
     },
     /** Feudal — long range single-target */
     longbow: {
-      damage: 11,
+      damage: 16,
       fireRatePerSec: 0.7,
       rangeTiles: 4.2,
       splashTiles: 0,
