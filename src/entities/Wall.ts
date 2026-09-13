@@ -93,7 +93,6 @@ export class WallSegment {
       g.fillRect(r.x, r.y, r.w, r.h);
       g.lineStyle(1, Palette.dirtDark, 0.6);
       g.strokeRect(r.x, r.y, r.w, r.h);
-      // Gold outline on breaches during build phase (rebuild affordance)
       if (this.buildHint) {
         g.lineStyle(3, Palette.gold, 0.95);
         g.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
@@ -105,17 +104,20 @@ export class WallSegment {
       return;
     }
     const pct = this.hp / this.maxHp;
-    const base = stone ? Palette.stone : Palette.wood;
-    const dmg = stone ? Palette.slate : Palette.dirtDark;
-    g.fillStyle(pct > 0.5 ? base : dmg, 1);
-    g.fillRect(r.x, r.y, r.w, r.h);
-    g.lineStyle(1, stone ? Palette.stoneLight : Palette.ochreDark, 1);
-    g.strokeRect(r.x, r.y, r.w, r.h);
+    // Short soft shadow under wall
+    g.fillStyle(0x000000, 0.22);
+    g.fillRect(r.x + 2, r.y + r.h - 1, r.w, 4);
+
+    if (stone) {
+      this.paintStoneWall(g, r, pct);
+    } else {
+      this.paintPalisade(g, r, pct);
+    }
+
     if (pct < 0.7) {
       g.lineStyle(1, Palette.breach, 0.7);
       g.lineBetween(r.x + 2, r.y + 2, r.x + r.w - 2, r.y + r.h - 2);
     }
-    // Build-phase repair affordance: bright outline on damaged segments
     if (this.buildHint && pct < 0.999) {
       g.lineStyle(3, Palette.gold, 0.95);
       g.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
@@ -123,6 +125,64 @@ export class WallSegment {
     this.hpText.setText(`${Math.ceil(this.hp)}`);
     this.hpText.setColor(pct < 0.35 ? '#E08080' : '#F0EBE0');
     this.drawIncomingGlow();
+  }
+
+  /** Dark/Feudal: vertical palisade logs — clearly wood */
+  private paintPalisade(
+    g: Phaser.GameObjects.Graphics,
+    r: { x: number; y: number; w: number; h: number },
+    pct: number,
+  ): void {
+    const horizontal = r.w >= r.h;
+    const bark = pct > 0.5 ? Palette.wood : Palette.dirtDark;
+    const bark2 = pct > 0.5 ? Palette.ochreDark : Palette.breach;
+    g.fillStyle(bark2, 1);
+    g.fillRect(r.x, r.y, r.w, r.h);
+    // Vertical log grain regardless of segment orientation (palisade look)
+    const logW = 5;
+    for (let x = r.x; x < r.x + r.w; x += logW) {
+      const w = Math.min(logW - 1, r.x + r.w - x);
+      g.fillStyle(Math.floor((x - r.x) / logW) % 2 === 0 ? bark : bark2, 1);
+      g.fillRect(x, r.y, w, r.h);
+      g.fillStyle(Palette.chalk, 0.18);
+      g.fillRect(x, r.y, Math.max(1, w * 0.35), r.h);
+      if (horizontal) {
+        g.fillStyle(bark, 1);
+        g.fillTriangle(x, r.y, x + w / 2, r.y - 3, x + w, r.y);
+      }
+    }
+    g.lineStyle(1, Palette.ochreDark, 0.85);
+    g.strokeRect(r.x, r.y, r.w, r.h);
+  }
+
+  /** Castle/Imperial: slate blocks + mortar */
+  private paintStoneWall(
+    g: Phaser.GameObjects.Graphics,
+    r: { x: number; y: number; w: number; h: number },
+    pct: number,
+  ): void {
+    g.fillStyle(Palette.mortar, 1);
+    g.fillRect(r.x, r.y, r.w, r.h);
+    const bw = 10;
+    const bh = 8;
+    let row = 0;
+    for (let y = r.y; y < r.y + r.h; y += bh + 1, row++) {
+      const ox = (row % 2) * Math.floor(bw / 2);
+      for (let x = r.x - ox; x < r.x + r.w; x += bw + 1) {
+        const px = Math.max(x, r.x);
+        const py = y;
+        const pw = Math.min(bw, r.x + r.w - px);
+        const ph = Math.min(bh, r.y + r.h - py);
+        if (pw <= 1 || ph <= 1) continue;
+        const base = pct > 0.5 ? Palette.slate : Palette.stone;
+        g.fillStyle(base, 1);
+        g.fillRect(px, py, pw, ph);
+        g.fillStyle(Palette.chalk, 0.14);
+        g.fillRect(px, py, Math.max(1, pw * 0.3), Math.max(1, ph * 0.35));
+      }
+    }
+    g.lineStyle(1, Palette.stoneLight, 0.9);
+    g.strokeRect(r.x, r.y, r.w, r.h);
   }
 
   private drawIncomingGlow(): void {

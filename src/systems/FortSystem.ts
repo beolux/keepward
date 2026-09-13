@@ -48,24 +48,49 @@ export class FortSystem {
   private drawGround(scene: Phaser.Scene): void {
     const g = this.groundGfx;
     const { width, height } = scene.scale;
+    // Outer field — muted grass (storybook flat)
     g.fillStyle(Palette.grassDark, 1);
     g.fillRect(0, 0, width, height);
     g.fillStyle(Palette.grass, 1);
     g.fillRect(0, 48, width, height - 148);
-    g.fillStyle(Palette.grassLight, 0.3);
-    for (let i = 0; i < 60; i++) {
+    g.fillStyle(Palette.grassLight, 0.28);
+    for (let i = 0; i < 50; i++) {
       g.fillCircle(
         Phaser.Math.Between(10, width - 10),
         Phaser.Math.Between(60, height - 120),
-        Phaser.Math.Between(4, 12),
+        Phaser.Math.Between(4, 14),
       );
     }
 
     const c = this.layout.courtyard;
-    this.courtyardGfx.fillStyle(0x3a4a38, 1);
-    this.courtyardGfx.fillRect(c.x, c.y, c.w, c.h);
-    this.courtyardGfx.lineStyle(1, Palette.ochreDark, 0.4);
-    this.courtyardGfx.strokeRect(c.x, c.y, c.w, c.h);
+    const cg = this.courtyardGfx;
+    // Packed earth courtyard
+    cg.fillStyle(Palette.dirt, 1);
+    cg.fillRect(c.x, c.y, c.w, c.h);
+    // Patchy grass islands
+    cg.fillStyle(Palette.grass, 0.45);
+    for (let i = 0; i < 28; i++) {
+      const px = c.x + 8 + ((i * 37) % Math.max(1, c.w - 24));
+      const py = c.y + 8 + ((i * 53) % Math.max(1, c.h - 24));
+      cg.fillCircle(px, py, 6 + (i % 5));
+    }
+    cg.fillStyle(Palette.forest, 0.15);
+    for (let i = 0; i < 12; i++) {
+      cg.fillCircle(
+        c.x + 20 + ((i * 41) % Math.max(1, c.w - 40)),
+        c.y + 20 + ((i * 29) % Math.max(1, c.h - 40)),
+        8,
+      );
+    }
+    // Stone pad only under Keep
+    const kx = this.keepPos.x;
+    const ky = this.keepPos.y;
+    cg.fillStyle(Palette.mortar, 0.95);
+    cg.fillEllipse(kx, ky + 18, 56, 22);
+    cg.fillStyle(Palette.slate, 0.55);
+    cg.fillEllipse(kx, ky + 18, 48, 16);
+    cg.lineStyle(1, Palette.ochreDark, 0.35);
+    cg.strokeRect(c.x, c.y, c.w, c.h);
   }
 
   baselineForAge(age: AgeId): number {

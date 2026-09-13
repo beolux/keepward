@@ -6,7 +6,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// placefix2 — force SW bump so iOS clients leave the frozen build
+// art1 — painted atlas pass; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

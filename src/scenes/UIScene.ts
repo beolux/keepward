@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H } from '../data/map';
 import { Palette } from '../data/palette';
+import { AGE_GEM } from '../data/artBible';
 import { TOWERS, TRACK_LABELS, type TowerId, type UpgradeTrack } from '../data/towers';
 import { TUNING } from '../data/tuning';
 import { audio } from '../systems/AudioSystem';
@@ -401,11 +402,16 @@ export class UIScene extends Phaser.Scene {
       if (state.aging) {
         this.ageBtnLabel.setText(`AGING\n${Math.floor(state.ageChannelPct * 100)}%`);
         this.ageBtn.setFillStyle(Palette.imperial);
+        this.ageBtnLabel.setColor('#1A2A22');
       } else {
         this.ageBtnLabel.setText(`AGE UP\n${state.ageCostWood}W ${state.ageCostGold}G`);
         const can = state.wood >= state.ageCostWood && state.gold >= state.ageCostGold;
-        this.ageBtn.setFillStyle(can ? Palette.feudal : Palette.slate);
-        this.ageBtn.setAlpha(can ? 1 : 0.5);
+        // Age gem: grey → bronze → silver → gold
+        this.ageBtn.setFillStyle(AGE_GEM[state.age]);
+        this.ageBtn.setStrokeStyle(2, can ? Palette.gold : Palette.stone);
+        this.ageBtn.setAlpha(can ? 1 : 0.55);
+        const gemDark = state.age === 'dark' || state.age === 'feudal';
+        this.ageBtnLabel.setColor(gemDark ? '#F0EBE0' : '#1A2A22');
       }
     } else {
       this.ageBtn.setVisible(false);

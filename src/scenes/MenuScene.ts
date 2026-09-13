@@ -3,6 +3,8 @@ import { Palette } from '../data/palette';
 import { GAME_W, GAME_H } from '../data/map';
 import { LAYOUT_ORDER, FORT_LAYOUTS, type LayoutId } from '../data/fort';
 import { audio } from '../systems/AudioSystem';
+import { FRAME_ORIGIN } from '../data/artBible';
+import { hasFrame } from '../art/atlas';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -21,21 +23,29 @@ export class MenuScene extends Phaser.Scene {
       g.fillCircle(Phaser.Math.Between(0, width), Phaser.Math.Between(0, height), Phaser.Math.Between(8, 24));
     }
 
-    const keep = this.add.graphics();
-    keep.fillStyle(Palette.slate, 1);
-    keep.fillRoundedRect(width / 2 - 40, height * 0.22, 80, 70, 4);
-    keep.fillStyle(Palette.ochre, 1);
-    for (let i = -32; i <= 28; i += 16) {
-      keep.fillRect(width / 2 + i, height * 0.22 - 18, 12, 20);
+    if (hasFrame(this, 'keep')) {
+      const o = FRAME_ORIGIN.keep;
+      this.add
+        .image(width / 2, height * 0.28, 'keepward', 'keep')
+        .setOrigin(o.x, o.y)
+        .setScale(1.35);
+    } else {
+      const keep = this.add.graphics();
+      keep.fillStyle(Palette.slate, 1);
+      keep.fillRoundedRect(width / 2 - 40, height * 0.22, 80, 70, 4);
+      keep.fillStyle(Palette.ochre, 1);
+      for (let i = -32; i <= 28; i += 16) {
+        keep.fillRect(width / 2 + i, height * 0.22 - 18, 12, 20);
+      }
+      keep.fillStyle(Palette.dirtDark, 1);
+      keep.fillRect(width / 2 - 10, height * 0.22 + 35, 20, 35);
     }
-    keep.fillStyle(Palette.dirtDark, 1);
-    keep.fillRect(width / 2 - 10, height * 0.22 + 35, 20, 35);
 
     this.add
       .text(width / 2, height * 0.12, 'KEEPWARD', {
         fontFamily: 'Georgia, serif',
         fontSize: '42px',
-        color: '#C4A35A',
+        color: '#B8862D',
         stroke: '#1A2A22',
         strokeThickness: 6,
       })

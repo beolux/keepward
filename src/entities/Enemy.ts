@@ -3,6 +3,8 @@ import { ENEMIES, eliteStats, type EnemyId } from '../data/enemies';
 import { Palette } from '../data/palette';
 import type { WallDir } from '../data/fort';
 import { TUNING } from '../data/tuning';
+import { ATLAS_KEY, FRAME_ORIGIN, UNIT_FRAME } from '../data/artBible';
+import { hasFrame, makeAtlasSprite } from '../art/atlas';
 
 let nextEnemyId = 1;
 
@@ -30,6 +32,7 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
   private wallAttackAcc = 0;
   private keepAttackAcc = 0;
   private bodyGfx: Phaser.GameObjects.Graphics;
+  private bodySprite: Phaser.GameObjects.Image | null = null;
   private hpBarBg: Phaser.GameObjects.Rectangle;
   private hpBar: Phaser.GameObjects.Rectangle;
 
@@ -86,6 +89,7 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     this.setScale(1);
     this.setPosition(spawn.x, spawn.y);
     this.drawBody(def.color, def.accent, def.radius);
+    if (this.elite && this.bodySprite) this.bodySprite.setTint(Palette.imperial);
     this.updateHpBar();
     this.setVisible(true);
     this.setActive(true);
@@ -101,7 +105,28 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
   private drawBody(color: number, accent: number, r: number): void {
     const g = this.bodyGfx;
     g.clear();
+    const frame = UNIT_FRAME[this.enemyId];
+    if (hasFrame(this.scene, frame)) {
+      if (!this.bodySprite) {
+        this.bodySprite = makeAtlasSprite(this.scene, frame);
+        if (this.bodySprite) this.addAt(this.bodySprite, 0);
+      }
+      if (this.bodySprite) {
+        const o = FRAME_ORIGIN[frame];
+        this.bodySprite.setTexture(ATLAS_KEY, frame);
+        this.bodySprite.setOrigin(o.x, o.y);
+        this.bodySprite.clearTint();
+        this.bodySprite.setVisible(true);
+        // Scale so unit footprint stays near prior radius (~10–16)
+        const target = Math.max(28, r * 2.6);
+        this.bodySprite.setDisplaySize(target, target);
+        return;
+      }
+    }
+    if (this.bodySprite) this.bodySprite.setVisible(false);
     const c = this.elite ? Palette.imperial : color;
+    g.fillStyle(0x000000, 0.28);
+    g.fillEllipse(0, r * 0.85, r * 2.2, r * 0.7);
     g.fillStyle(c, 1);
     if (this.enemyId === 'ram') {
       g.fillRoundedRect(-r, -r * 0.6, r * 2, r * 1.2, 4);

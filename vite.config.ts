@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'favicon.svg'],
+      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'favicon.svg', 'assets/keepward-atlas.png', 'assets/keepward-atlas.json'],
       manifest: {
         name: 'Keepward',
         short_name: 'Keepward',
@@ -33,7 +33,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
         skipWaiting: true,
         clientsClaim: true,
       },

@@ -166,6 +166,7 @@ export class GameScene extends Phaser.Scene {
     this.fx = new FxSystem(this);
 
     this.keepTower = new TowerUnit(this, this.fort.keepPos.x, this.fort.keepPos.y, 'keep');
+    this.keepTower.setAgeVisual(this.age);
     this.towers.push(this.keepTower);
 
     this.keepHpBar = this.add.graphics().setDepth(26).setAlpha(0);
@@ -194,6 +195,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     this.ghost = new PlacementGhost(this);
+    this.ghost.setAgeVisual(this.age);
 
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
@@ -470,6 +472,7 @@ export class GameScene extends Phaser.Scene {
     this.wood -= def.costWood;
     this.gold -= def.costGold;
     const tower = new TowerUnit(this, x, y, this.selectedTower);
+    tower.setAgeVisual(this.age);
     // Never selectPlacedTower from the place path — that armed interactives
     // under the active finger and wedged iOS Safari.
     this.placeTapIgnoreUntil = this.time.now + 450;
@@ -703,6 +706,8 @@ export class GameScene extends Phaser.Scene {
     this.aging = false;
     this.ageTarget = null;
     this.fort.onAgeUp(prev, next);
+    for (const t of this.towers) t.setAgeVisual(next);
+    this.ghost.setAgeVisual(next);
     audio.play('age');
     this.game.events.emit('keepward-toast', `Advanced to ${AGES[next].name}!`);
     this.emitHud();

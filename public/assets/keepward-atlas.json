@@ -1,0 +1,519 @@
+{
+  "frames": {
+    "terrain_dirt": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "terrain_grass": {
+      "frame": {
+        "x": 34,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "terrain_stone": {
+      "frame": {
+        "x": 68,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "wall_wood": {
+      "frame": {
+        "x": 102,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "wall_stone": {
+      "frame": {
+        "x": 136,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "keep": {
+      "frame": {
+        "x": 0,
+        "y": 40,
+        "w": 80,
+        "h": 96
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 96
+      },
+      "sourceSize": {
+        "w": 80,
+        "h": 96
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "keep_aged": {
+      "frame": {
+        "x": 84,
+        "y": 40,
+        "w": 80,
+        "h": 96
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 96
+      },
+      "sourceSize": {
+        "w": 80,
+        "h": 96
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "tower_watchtower": {
+      "frame": {
+        "x": 0,
+        "y": 150,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_watchtower_aged": {
+      "frame": {
+        "x": 68,
+        "y": 150,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_longbow": {
+      "frame": {
+        "x": 136,
+        "y": 150,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_longbow_aged": {
+      "frame": {
+        "x": 204,
+        "y": 150,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_spearPost": {
+      "frame": {
+        "x": 272,
+        "y": 150,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.82
+      }
+    },
+    "tower_spearPost_aged": {
+      "frame": {
+        "x": 340,
+        "y": 150,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.82
+      }
+    },
+    "tower_mangonel": {
+      "frame": {
+        "x": 0,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_mangonel_aged": {
+      "frame": {
+        "x": 68,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "unit_militia": {
+      "frame": {
+        "x": 0,
+        "y": 320,
+        "w": 48,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 48
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "unit_archer": {
+      "frame": {
+        "x": 52,
+        "y": 320,
+        "w": 48,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 48
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "unit_spearman": {
+      "frame": {
+        "x": 104,
+        "y": 320,
+        "w": 48,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 48
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "unit_knight": {
+      "frame": {
+        "x": 156,
+        "y": 320,
+        "w": 48,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 48
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.7
+      }
+    },
+    "unit_ram": {
+      "frame": {
+        "x": 208,
+        "y": 320,
+        "w": 48,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 48
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.65
+      }
+    },
+    "unit_elephant": {
+      "frame": {
+        "x": 260,
+        "y": 320,
+        "w": 48,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 48
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.65
+      }
+    }
+  },
+  "meta": {
+    "app": "keepward-generate-atlas",
+    "version": "art1",
+    "image": "keepward-atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 512,
+      "h": 512
+    },
+    "scale": "1"
+  }
+}
