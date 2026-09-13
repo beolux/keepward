@@ -1,6 +1,6 @@
 /**
  * Keepward art bible — Ideas Guy notes land here.
- * Flat gouache / storybook. No PBR, no AoE, original IP.
+ * Flat gouache / storybook. No PBR, no AoE, original IP.\n * art2: distinct tower nouns + per-tower shots + tight shadows.
  * Swap atlas PNGs; keep gameplay IDs + pivots stable.
  */
 
@@ -167,4 +167,10 @@ export const ART_NOTES = [
   'Readable at arm’s length on iPhone.',
   'Palisade wood ≠ stone wall — clear material difference.',
   'Each tower distinct face; enemies by color + silhouette.',
+  // art2 / Ideas Guy
+  '64px nouns: WT open timber+cone; LB tall slit+crenels; Spear low stake ring (≤55% WT); Mangonel arm+counterweight.',
+  'Shadows: ellipse α~0.35, overlap feet 2–4px — no float gap.',
+  'Bases wood Dark/Feudal → slate Castle/Imperial.',
+  'Pop: 1px #3D4F5F outline + warm fill + chalk rim light-side only.',
+  'Projectiles: WT chalk arrow; LB longer dirt+green fletch; Spear stub; Mangonel slate boulder lob+dust.',
 ] as const;

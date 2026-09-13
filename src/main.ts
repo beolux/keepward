@@ -6,7 +6,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// art1 — painted atlas pass; force SW bump
+// art2 — distinct towers + projectiles + shadow fix; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

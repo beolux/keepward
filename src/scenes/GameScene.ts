@@ -914,16 +914,6 @@ export class GameScene extends Phaser.Scene {
       const target = tower.tryAcquire(this.enemies, dtMs);
       if (target) {
         const p = this.projPool.acquire();
-        const tint =
-          tower.towerId === 'mangonel'
-            ? Palette.feudal
-            : tower.towerId === 'spearPost'
-              ? Palette.ochreDark
-              : tower.towerId === 'longbow'
-                ? Palette.grassLight
-                : tower.towerId === 'keep'
-                  ? Palette.stoneLight
-                  : Palette.ochre;
         p.fire(
           tower.x,
           tower.y - 10,
@@ -933,7 +923,7 @@ export class GameScene extends Phaser.Scene {
           tower.damage,
           tower.splash,
           target.uid,
-          tint,
+          tower.towerId,
         );
         this.activeProjs.push(p);
       }
@@ -969,6 +959,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (hit) {
+        if (p.wantsDust) this.mangonelDust(p.x, p.y);
         p.deactivate();
         this.activeProjs.splice(i, 1);
         this.projPool.release(p);
@@ -1047,6 +1038,24 @@ export class GameScene extends Phaser.Scene {
       });
       this.emitHud();
     }
+  }
+
+  private mangonelDust(x: number, y: number): void {
+    const g = this.add.graphics().setDepth(45);
+    for (let i = 0; i < 5; i++) {
+      const ang = (i / 5) * Math.PI * 2 + Math.random();
+      const rad = 4 + Math.random() * 8;
+      g.fillStyle(Palette.dirt, 0.45);
+      g.fillCircle(x + Math.cos(ang) * rad, y + Math.sin(ang) * rad * 0.55, 2 + Math.random() * 2);
+    }
+    g.fillStyle(Palette.slate, 0.3);
+    g.fillCircle(x, y, 5);
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 280,
+      onComplete: () => g.destroy(),
+    });
   }
 
   private splashFx(x: number, y: number, r: number): void {

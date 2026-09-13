@@ -174,9 +174,33 @@ class Canvas {
     }
   }
 
-  /** Short drop shadow under feet */
+  /** Short drop shadow under feet — call with cy at feet, overlaps 2–4px */
   shadow(cx, cy, rx, ry, alpha = 0.35) {
-    this.ellipse(cx, cy, rx, ry, HEX.shadow, 0.3, alpha);
+    // No rim-lighten — keep dark so it reads on dirt/grass
+    const c = parseHex(HEX.shadow);
+    const Rx = Math.ceil(rx + 1);
+    const Ry = Math.ceil(ry + 1);
+    for (let dy = -Ry; dy <= Ry; dy++) {
+      for (let dx = -Rx; dx <= Rx; dx++) {
+        const nx = dx / rx;
+        const ny = dy / ry;
+        const d = Math.hypot(nx, ny);
+        if (d > 1) continue;
+        const soft = 0.25;
+        const fall = d < soft ? 1 : 1 - (d - soft) / (1 - soft);
+        const a = Math.max(0, fall) ** 1.15;
+        this.blend(cx + dx, cy + dy, c, a * alpha);
+      }
+    }
+  }
+
+  /** 1px pop outline in nightRoof / #3D4F5F */
+  outlineRect(x0, y0, w, h, round = 0, alpha = 0.95) {
+    this.rect(x0 - 1, y0 - 1, w + 2, h + 2, HEX.nightRoof, alpha, Math.max(0, round + 1));
+  }
+
+  chalkRim(x, y, r = 2.5, alpha = 0.35) {
+    this.stamp(x, y, r, HEX.sunRim, 0.55, alpha);
   }
 
   clear() {
@@ -275,122 +299,170 @@ function paintWallStone(size = 32) {
 function paintKeep(w, h, aged) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 6, 22, 5, 0.4);
-  // stone pad
-  c.ellipse(cx, h - 8, 24, 6, HEX.mortar, 0.4, 0.7);
-  // body — square donjon
+  // Body ends ~y76 — feet/shadow must meet it (no float pad gap)
+  const feetY = 78;
+  c.ellipse(cx, feetY - 4, 24, 5, HEX.mortar, 0.4, 0.55);
   const body = aged ? HEX.slate : HEX.keepBody;
-  c.rect(cx - 22, 28, 44, 48, body, 1, 3);
-  c.stamp(cx - 10, 34, 10, HEX.sunRim, 0.5, 0.18);
-  // battlements
+  const bodyH = 50;
+  c.outlineRect(cx - 22, 26, 44, bodyH, 3);
+  c.rect(cx - 22, 26, 44, bodyH, body, 1, 3);
+  c.chalkRim(cx - 12, 34, 9, 0.22);
   for (let i = -18; i <= 14; i += 10) {
-    c.rect(cx + i, 16, 8, 14, aged ? HEX.nightRoof : body, 1, 1);
+    c.outlineRect(cx + i, 14, 8, 14, 1);
+    c.rect(cx + i, 14, 8, 14, aged ? HEX.nightRoof : body, 1, 1);
   }
-  // door
-  c.rect(cx - 6, 52, 12, 22, HEX.logBarkDark, 1, 2);
-  c.stamp(cx, 60, 2, HEX.ochreWood, 0.5, 0.5);
-  // banner stub
+  c.rect(cx - 6, feetY - 26, 12, 24, HEX.logBarkDark, 1, 2);
+  c.stamp(cx, feetY - 16, 2, HEX.ochreWood, 0.5, 0.5);
   c.rect(cx + 14, 22, 2, 18, HEX.logBark, 1);
   c.rect(cx + 16, 22, 10, 8, aged ? HEX.knightGold : HEX.banner, 1, 1);
-  // window slits
   c.rect(cx - 14, 40, 6, 8, HEX.nightRoof, 0.9, 1);
   c.rect(cx + 8, 40, 6, 8, HEX.nightRoof, 0.9, 1);
-  if (aged) {
-    c.rect(cx - 20, 26, 40, 3, HEX.knightGold, 0.7);
-  }
+  if (aged) c.rect(cx - 20, 26, 40, 3, HEX.knightGold, 0.7);
+
+  c.shadow(cx, feetY - 2, 24, 5.5, 0.55);
   return c;
 }
 
+/** Watchtower — open timber posts + cone thatch (not a solid block) */
 function paintWatchtower(w, h, aged) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 4, 14, 4, 0.35);
-  // timber post
-  c.rect(cx - 10, 28, 20, 32, HEX.logBark, 1, 2);
-  c.stamp(cx - 4, 32, 6, HEX.sunRim, 0.5, 0.2);
+  const feetY = 60;
+  const timber = aged ? HEX.stoneBlock : HEX.logBark;
+  const timberDark = aged ? HEX.stoneBlockDark : HEX.logBarkDark;
+  // open timber: 3 posts with gaps
+  const posts = [-9, 0, 9];
+  for (const ox of posts) {
+    c.outlineRect(cx + ox - 3, 30, 6, feetY - 30, 1);
+    c.rect(cx + ox - 3, 30, 6, feetY - 30, ox === 0 ? timberDark : timber, 1, 1);
+    c.chalkRim(cx + ox - 1, 34, 2.2, 0.28);
+  }
+  // cross braces
+  c.rect(cx - 11, 38, 22, 2, timberDark, 0.9);
+  c.rect(cx - 11, 50, 22, 2, timberDark, 0.9);
   // platform
-  c.rect(cx - 14, 26, 28, 6, HEX.ochreWood, 1, 1);
-  // cone thatch / slate roof
+  c.outlineRect(cx - 14, 26, 28, 6, 1);
+  c.rect(cx - 14, 26, 28, 6, aged ? HEX.slate : HEX.ochreWood, 1, 1);
+  c.chalkRim(cx - 6, 28, 3, 0.25);
+  // cone thatch / slate
   const roof = aged ? HEX.nightRoof : HEX.thatch;
   const roofDark = aged ? HEX.slate : HEX.thatchDark;
   for (let i = 0; i < 14; i++) {
     const t = i / 13;
-    const half = lerp(2, 16, t);
-    const y = 8 + i * 1.4;
-    c.rect(cx - half, y, half * 2, 2, mix(parseHex(roof), parseHex(roofDark), t * 0.4), 1);
+    const half = lerp(2, 15, t);
+    const y = 8 + i * 1.35;
+    c.rect(cx - half - 1, y, half * 2 + 2, 2, HEX.nightRoof, 0.85);
+    c.rect(cx - half, y, half * 2, 2, mix(parseHex(roof), parseHex(roofDark), t * 0.45), 1);
   }
-  c.stamp(cx - 4, 14, 5, HEX.sunRim, 0.5, 0.22);
+  c.chalkRim(cx - 4, 14, 4.5, 0.28);
   // lookout slit
-  c.ellipse(cx, 40, 3, 4, HEX.nightRoof, 0.4, 0.95);
+  c.ellipse(cx, 42, 2.5, 4, HEX.nightRoof, 0.35, 0.95);
+
+  c.shadow(cx, feetY - 2, 14, 4.5, 0.55);
   return c;
 }
 
+/** Longbow — tall slit shaft + crenelated crown (not cone twin) */
 function paintLongbow(w, h, aged) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 4, 12, 4, 0.35);
+  const feetY = 62;
+  const shaft = aged ? HEX.slate : HEX.forest;
+  const shaftDark = aged ? HEX.stoneBlockDark : darken(parseHex(HEX.forest), 0.2);
   // tall slender shaft
-  c.rect(cx - 8, 22, 16, 38, HEX.forest, 1, 2);
-  c.stamp(cx - 3, 28, 5, HEX.sunRim, 0.5, 0.18);
-  // loft head
-  c.rect(cx - 13, 14, 26, 16, aged ? HEX.slate : HEX.ochreWood, 1, 3);
-  // slit windows
-  c.rect(cx - 8, 18, 3, 8, HEX.nightRoof, 1);
-  c.rect(cx + 5, 18, 3, 8, HEX.nightRoof, 1);
-  // roof cap
-  const roof = aged ? HEX.nightRoof : HEX.thatch;
-  c.ellipse(cx, 12, 14, 6, roof, 0.45, 1);
-  c.stamp(cx - 4, 10, 4, HEX.sunRim, 0.5, 0.25);
-  // bow hint
-  c.ellipse(cx + 10, 30, 2, 8, HEX.ochreWood, 0.4, 0.8);
+  c.outlineRect(cx - 7, 18, 14, feetY - 18, 2);
+  c.rect(cx - 7, 18, 14, feetY - 18, shaft, 1, 2);
+  c.chalkRim(cx - 3, 24, 4, 0.22);
+  // arrow slits
+  c.rect(cx - 2, 28, 4, 10, HEX.nightRoof, 1);
+  c.rect(cx - 2, 44, 4, 8, HEX.nightRoof, 1);
+  // loft band
+  c.outlineRect(cx - 12, 14, 24, 10, 1);
+  c.rect(cx - 12, 14, 24, 10, aged ? HEX.stoneBlock : HEX.ochreWood, 1, 2);
+  // crenelated crown (NOT cone)
+  const crown = aged ? HEX.nightRoof : HEX.thatchDark;
+  for (let i = -10; i <= 6; i += 8) {
+    c.outlineRect(cx + i, 6, 6, 10, 1);
+    c.rect(cx + i, 6, 6, 10, crown, 1, 1);
+  }
+  c.chalkRim(cx - 6, 10, 3, 0.3);
+  // bow hint on side
+  c.ellipse(cx + 9, 36, 2, 7, HEX.ochreWood, 0.4, 0.85);
+
+  c.shadow(cx, feetY - 2, 12, 4, 0.55);
   return c;
 }
 
+/** Spear Post — low wide stake ring ≤55% WT height */
 function paintSpearPost(w, h, aged) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 4, 16, 4, 0.35);
-  // stake ring base
-  c.ellipse(cx, h - 10, 16, 5, HEX.logBarkDark, 0.4, 0.9);
-  c.rect(cx - 14, h - 16, 28, 8, HEX.logBark, 1, 2);
-  // forked poles / spears
+  // WT visual ~52px; spears ≤ ~28px tall → tips around y=34 if feet at 60
+  const feetY = 60;
+  const base = aged ? HEX.slate : HEX.logBark;
+  const baseDark = aged ? HEX.stoneBlockDark : HEX.logBarkDark;
+  // wide stake ring base
+  c.ellipse(cx, feetY - 3, 18, 5, baseDark, 0.35, 0.9);
+  c.outlineRect(cx - 16, feetY - 10, 32, 8, 2);
+  c.rect(cx - 16, feetY - 10, 32, 8, base, 1, 2);
+  c.chalkRim(cx - 6, feetY - 8, 4, 0.22);
+  // short stakes (low silhouette)
   const spears = [
-    [-10, 18],
-    [-2, 10],
-    [6, 16],
-    [12, 22],
+    [-12, 38],
+    [-4, 34],
+    [4, 36],
+    [12, 40],
   ];
   for (const [ox, tipY] of spears) {
-    c.rect(cx + ox, tipY, 3, h - 18 - tipY, HEX.ochreWood, 1);
-    // tip
-    c.stamp(cx + ox + 1, tipY, 3, aged ? HEX.slate : HEX.chalk, 0.4, 1);
+    c.outlineRect(cx + ox - 1, tipY, 3, feetY - 10 - tipY, 0);
+    c.rect(cx + ox - 1, tipY, 3, feetY - 10 - tipY, HEX.ochreWood, 1);
+    c.stamp(cx + ox + 0.5, tipY, 2.5, aged ? HEX.slate : HEX.chalk, 0.4, 1);
   }
-  // center fork
-  c.rect(cx - 2, 20, 4, 28, HEX.logBarkDark, 1);
+  // center post
+  c.outlineRect(cx - 2, 36, 4, feetY - 14 - 36, 1);
+  c.rect(cx - 2, 36, 4, feetY - 14 - 36, baseDark, 1);
+
+  c.shadow(cx, feetY - 2, 18, 5, 0.55);
   return c;
 }
 
+/** Mangonel — arm + counterweight (redraw, not recolor of WT) */
 function paintMangonel(w, h, aged) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 4, 18, 5, 0.35);
-  // nest / platform
-  c.rect(cx - 16, 36, 32, 20, HEX.logBark, 1, 3);
-  c.stamp(cx - 6, 40, 8, HEX.sunRim, 0.5, 0.15);
-  // wheels hint
-  c.ellipse(cx - 12, 56, 5, 5, HEX.logBarkDark, 0.4, 1);
-  c.ellipse(cx + 12, 56, 5, 5, HEX.logBarkDark, 0.4, 1);
-  // angled arm
-  const arm = aged ? HEX.slate : HEX.ochreWood;
-  for (let i = 0; i < 18; i++) {
-    c.rect(cx - 2 + i * 0.7, 28 - i, 4, 4, arm, 1);
+  const feetY = 60;
+  const nest = aged ? HEX.slate : HEX.logBark;
+  const nestDark = aged ? HEX.stoneBlockDark : HEX.logBarkDark;
+  const arm = aged ? HEX.stoneBlock : HEX.ochreWood;
+  // nest / chassis
+  c.outlineRect(cx - 16, 38, 32, 16, 3);
+  c.rect(cx - 16, 38, 32, 16, nest, 1, 3);
+  c.chalkRim(cx - 6, 42, 6, 0.18);
+  // wheels at feet
+  c.ellipse(cx - 12, feetY - 2, 5, 5, nestDark, 0.35, 1);
+  c.ellipse(cx + 12, feetY - 2, 5, 5, nestDark, 0.35, 1);
+  c.ellipse(cx - 12, feetY - 2, 2, 2, HEX.ochreWood, 0.4, 0.7);
+  c.ellipse(cx + 12, feetY - 2, 2, 2, HEX.ochreWood, 0.4, 0.7);
+  // pivot
+  c.outlineRect(cx - 5, 32, 10, 10, 2);
+  c.rect(cx - 5, 32, 10, 10, nestDark, 1, 2);
+  // throwing arm (up-right) with bucket
+  for (let i = 0; i < 16; i++) {
+    c.rect(cx - 1 + i * 0.85, 30 - i * 1.05, 4, 4, arm, 1);
   }
   // bucket
-  c.ellipse(cx + 12, 12, 8, 6, aged ? HEX.nightRoof : HEX.thatchDark, 0.4, 1);
-  c.rect(cx + 6, 12, 12, 8, HEX.logBarkDark, 1, 2);
-  c.stamp(cx + 10, 10, 3, HEX.sunRim, 0.5, 0.3);
-  // pivot block
-  c.rect(cx - 6, 30, 12, 10, HEX.logBarkDark, 1, 2);
+  c.ellipse(cx + 14, 12, 7, 5, aged ? HEX.nightRoof : HEX.thatchDark, 0.4, 1);
+  c.outlineRect(cx + 8, 12, 12, 7, 2);
+  c.rect(cx + 8, 12, 12, 7, nestDark, 1, 2);
+  c.chalkRim(cx + 11, 11, 2.5, 0.3);
+  // counterweight (short end, left-down) — distinct noun
+  c.outlineRect(cx - 18, 34, 12, 10, 2);
+  c.rect(cx - 18, 34, 12, 10, aged ? HEX.slate : HEX.logBarkDark, 1, 2);
+  c.stamp(cx - 12, 38, 3, HEX.sunRim, 0.5, 0.2);
+  // strut from pivot to counterweight
+  c.rect(cx - 14, 36, 10, 3, arm, 1);
+
+  c.shadow(cx, feetY - 2, 18, 5.5, 0.55);
   return c;
 }
 
@@ -443,7 +515,7 @@ function paintUnitSpearman(w, h) {
 function paintUnitKnight(w, h) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 3, 14, 4, 0.4);
+  c.shadow(cx, h - 3, 14, 4, 0.55);
   // horse body
   c.ellipse(cx, 32, 14, 9, HEX.knightSteel, 0.4, 1);
   c.ellipse(cx + 10, 26, 6, 5, HEX.slate, 0.4, 1);
@@ -462,7 +534,7 @@ function paintUnitKnight(w, h) {
 function paintUnitRam(w, h) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 3, 16, 4, 0.4);
+  c.shadow(cx, h - 3, 16, 4, 0.55);
   // wheeled shed
   c.rect(cx - 16, 18, 28, 18, HEX.ramWood, 1, 3);
   c.stamp(cx - 6, 22, 8, HEX.sunRim, 0.5, 0.12);
@@ -480,7 +552,7 @@ function paintUnitRam(w, h) {
 function paintUnitElephant(w, h) {
   const c = new Canvas(w, h);
   const cx = w / 2;
-  c.shadow(cx, h - 3, 16, 4, 0.4);
+  c.shadow(cx, h - 3, 16, 4, 0.55);
   // body
   c.ellipse(cx, 28, 16, 12, HEX.elephantHide, 0.4, 1);
   // head
@@ -562,7 +634,7 @@ const json = {
   frames,
   meta: {
     app: 'keepward-generate-atlas',
-    version: 'art1',
+    version: 'art2',
     image: 'keepward-atlas.png',
     format: 'RGBA8888',
     size: { w: ATLAS_W, h: ATLAS_H },

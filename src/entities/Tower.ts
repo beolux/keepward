@@ -104,7 +104,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
 
     if (id === 'keep') {
       g.fillStyle(0x000000, 0.28);
-      g.fillEllipse(0, 22, 48, 10);
+      g.fillEllipse(0, 16, 48, 10);
       g.fillStyle(this.agedLook ? Palette.slate : def.color, 1);
       g.fillRoundedRect(-22, -18, 44, 40, 4);
       g.fillStyle(roof, 1);
@@ -117,7 +117,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     }
     if (id === 'watchtower') {
       g.fillStyle(0x000000, 0.28);
-      g.fillEllipse(0, 22, 28, 8);
+      g.fillEllipse(0, 16, 28, 8);
       g.fillStyle(def.color, 1);
       g.fillRect(-10, -8, 20, 28);
       g.fillStyle(roof, 1);
@@ -128,7 +128,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     }
     if (id === 'spearPost') {
       g.fillStyle(0x000000, 0.28);
-      g.fillEllipse(0, 20, 30, 8);
+      g.fillEllipse(0, 12, 30, 8);
       g.fillStyle(def.color, 1);
       g.fillRoundedRect(-12, 0, 24, 16, 2);
       g.fillStyle(roof, 1);
@@ -141,7 +141,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     }
     if (id === 'longbow') {
       g.fillStyle(0x000000, 0.28);
-      g.fillEllipse(0, 22, 26, 8);
+      g.fillEllipse(0, 16, 26, 8);
       g.fillStyle(def.color, 1);
       g.fillRect(-8, -6, 16, 26);
       g.fillStyle(roof, 1);
@@ -152,7 +152,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
       return;
     }
     g.fillStyle(0x000000, 0.28);
-    g.fillEllipse(0, 20, 32, 8);
+    g.fillEllipse(0, 14, 32, 8);
     g.fillStyle(def.color, 1);
     g.fillRoundedRect(-14, -4, 28, 22, 3);
     g.fillStyle(roof, 1);

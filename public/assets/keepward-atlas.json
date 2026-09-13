@@ -507,7 +507,7 @@
   },
   "meta": {
     "app": "keepward-generate-atlas",
-    "version": "art1",
+    "version": "art2",
     "image": "keepward-atlas.png",
     "format": "RGBA8888",
     "size": {
