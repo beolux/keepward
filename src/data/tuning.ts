@@ -1,6 +1,7 @@
 /**
  * Keepward fort-siege balance — `TUNING.md` documents Nick walls3 feel buff.
  * Wall HP (~+20% over walls2) + wall DPS pin + rebuild + Spear Post / Longbow locked.
+ * bounty1 (CoS): 2× kill wood/gold. Passive, wave bonus, research costs unchanged.
  */
 
 export const TILE_PX = 40;
@@ -192,48 +193,48 @@ export const TUNING = {
       hp: 28,
       speed: 70,
       armor: 0,
-      bountyWood: 2,
-      bountyGold: 1,
+      bountyWood: 4,
+      bountyGold: 2,
       radius: 10,
     },
     archer: {
       hp: 22,
       speed: 78,
       armor: 0,
-      bountyWood: 2,
-      bountyGold: 2,
+      bountyWood: 4,
+      bountyGold: 4,
       radius: 9,
     },
     spearman: {
       hp: 40,
       speed: 62,
       armor: 2,
-      bountyWood: 3,
-      bountyGold: 2,
+      bountyWood: 6,
+      bountyGold: 4,
       radius: 11,
     },
     knight: {
       hp: 95,
       speed: 48,
       armor: 5,
-      bountyWood: 4,
-      bountyGold: 4,
+      bountyWood: 8,
+      bountyGold: 8,
       radius: 13,
     },
     ram: {
       hp: 220,
       speed: 32,
       armor: 8,
-      bountyWood: 10,
-      bountyGold: 8,
+      bountyWood: 20,
+      bountyGold: 16,
       radius: 16,
     },
     elephant: {
       hp: 1200,
       speed: 28,
       armor: 12,
-      bountyWood: 40,
-      bountyGold: 40,
+      bountyWood: 80,
+      bountyGold: 80,
       radius: 22,
     },
   },

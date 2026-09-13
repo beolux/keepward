@@ -6,7 +6,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// keep1 — Keep research hall + upgrade pips + rank looks; force SW bump
+// bounty1 — 2× kill wood/gold (CoS pin); force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

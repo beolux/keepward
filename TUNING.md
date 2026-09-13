@@ -7,6 +7,18 @@ Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`
 ## Nick / CoS override (early2)
 Softer than early1. Exact comps w1–8; knights from **w8** (not w6); first elite still w10; rams still w12. W9–11 keep −25% mix but knights max 1 until w11. Spawn-time HP ×0.65 on w1–5 and ×0.85 on w6–8 (in `spawnEnemy`, not ENEMIES base). Interval floor 500ms through w8. Tower dmg / walls / place-freeze / w12+ untouched.
 
+## CoS bounty1 — 2× kill wood/gold
+Research costs made saving hard. **2× all kill wood and gold** so research + repairs fund from kills. Passive trickle, wave-clear `bonusGold`, research costs, wave comps, place-freeze, combat damage **unchanged**.
+
+| Enemy | Wood | Gold |
+|-------|------|------|
+| Militia | 4 | 2 |
+| Archer | 4 | 4 |
+| Spearman | 6 | 4 |
+| Knight | 8 | 8 |
+| Ram | 20 | 16 |
+| Elephant | 80 | 80 |
+
 ## Fort
 - 8 wall segments: N/NE/E/SE/S/SW/W/NW
 - Layouts: square / wide / tall (`src/data/fort.ts`) — courtyard ~2× interior placeable area
@@ -70,7 +82,7 @@ Militia 2 · Archer 1 · Spearman 3 · Knight 4 · Ram 10 · Elephant 7 (+25% ad
 | 12+ | unchanged late curve | rams from 12 |
 
 ## Enemy HP / speed (not on combat DPS sheet)
-See `TUNING.enemies` in `tuning.ts`. Wall DPS + bounties are sheet-pinned.
+See `TUNING.enemies` in `tuning.ts`. Wall DPS sheet-pinned; bounties are CoS bounty1 (2× sheet).
 
 ## Build phase (UX)
 - Before wave 1 and between waves: build window (place / upgrade / repair / rebuild)

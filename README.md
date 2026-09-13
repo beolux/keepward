@@ -2,9 +2,9 @@
 
 Medieval fort-siege tower defense — hold the keep. Portrait mobile-first PWA.
 
-**Play:** https://beolux.github.io/keepward/?v=keep1
+**Play:** https://beolux.github.io/keepward/?v=bounty1
 
-Hard-refresh / open with `?v=keep1` if a prior build left a stuck service worker.
+Hard-refresh / open with `?v=bounty1` if a prior build left a stuck service worker.
 
 ## Stack
 
