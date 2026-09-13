@@ -6,7 +6,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// art2 — distinct towers + projectiles + shadow fix; force SW bump
+// keep1 — Keep research hall + upgrade pips + rank looks; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

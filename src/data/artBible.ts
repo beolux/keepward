@@ -86,14 +86,29 @@ export type AtlasFrameId =
   | 'wall_stone'
   | 'keep'
   | 'keep_aged'
+  | 'keep_r1'
+  | 'keep_r2'
+  | 'keep_r3'
   | 'tower_watchtower'
   | 'tower_watchtower_aged'
+  | 'tower_watchtower_r1'
+  | 'tower_watchtower_r2'
+  | 'tower_watchtower_r3'
   | 'tower_longbow'
   | 'tower_longbow_aged'
+  | 'tower_longbow_r1'
+  | 'tower_longbow_r2'
+  | 'tower_longbow_r3'
   | 'tower_spearPost'
   | 'tower_spearPost_aged'
+  | 'tower_spearPost_r1'
+  | 'tower_spearPost_r2'
+  | 'tower_spearPost_r3'
   | 'tower_mangonel'
   | 'tower_mangonel_aged'
+  | 'tower_mangonel_r1'
+  | 'tower_mangonel_r2'
+  | 'tower_mangonel_r3'
   | 'unit_militia'
   | 'unit_archer'
   | 'unit_spearman'
@@ -110,14 +125,29 @@ export const FRAME_ORIGIN: Record<AtlasFrameId, { x: number; y: number }> = {
   wall_stone: { x: 0.5, y: 0.5 },
   keep: { x: 0.5, y: 0.72 },
   keep_aged: { x: 0.5, y: 0.72 },
+  keep_r1: { x: 0.5, y: 0.72 },
+  keep_r2: { x: 0.5, y: 0.72 },
+  keep_r3: { x: 0.5, y: 0.72 },
   tower_watchtower: { x: 0.5, y: 0.78 },
   tower_watchtower_aged: { x: 0.5, y: 0.78 },
+  tower_watchtower_r1: { x: 0.5, y: 0.78 },
+  tower_watchtower_r2: { x: 0.5, y: 0.78 },
+  tower_watchtower_r3: { x: 0.5, y: 0.78 },
   tower_longbow: { x: 0.5, y: 0.78 },
   tower_longbow_aged: { x: 0.5, y: 0.78 },
+  tower_longbow_r1: { x: 0.5, y: 0.78 },
+  tower_longbow_r2: { x: 0.5, y: 0.78 },
+  tower_longbow_r3: { x: 0.5, y: 0.78 },
   tower_spearPost: { x: 0.5, y: 0.82 },
   tower_spearPost_aged: { x: 0.5, y: 0.82 },
+  tower_spearPost_r1: { x: 0.5, y: 0.82 },
+  tower_spearPost_r2: { x: 0.5, y: 0.82 },
+  tower_spearPost_r3: { x: 0.5, y: 0.82 },
   tower_mangonel: { x: 0.5, y: 0.78 },
   tower_mangonel_aged: { x: 0.5, y: 0.78 },
+  tower_mangonel_r1: { x: 0.5, y: 0.78 },
+  tower_mangonel_r2: { x: 0.5, y: 0.78 },
+  tower_mangonel_r3: { x: 0.5, y: 0.78 },
   unit_militia: { x: 0.5, y: 0.72 },
   unit_archer: { x: 0.5, y: 0.72 },
   unit_spearman: { x: 0.5, y: 0.72 },
@@ -173,4 +203,9 @@ export const ART_NOTES = [
   'Bases wood Dark/Feudal → slate Castle/Imperial.',
   'Pop: 1px #3D4F5F outline + warm fill + chalk rim light-side only.',
   'Projectiles: WT chalk arrow; LB longer dirt+green fletch; Spear stub; Mangonel slate boulder lob+dust.',
+  // keep1
+  'Keep = research hall: Age / Attack / Defense / Siege tabs.',
+  'Upgrade pip: gold = affordable now; silver check = maxed. Clears on tap.',
+  'Kill-rank looks: trim/crenelation + tint; rank 3 most capable. Same colliders.',
+  'Aura ring 3.5 tiles only when Keep selected; buff towers inside.',
 ] as const;

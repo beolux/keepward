@@ -6,6 +6,7 @@ import { TOWERS, TRACK_LABELS, type TowerId, type UpgradeTrack } from '../data/t
 import { TUNING } from '../data/tuning';
 import { audio } from '../systems/AudioSystem';
 import type { GameScene, GameHudState } from './GameScene';
+import type { KeepTab } from '../data/keepResearch';
 
 export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
@@ -396,27 +397,10 @@ export class UIScene extends Phaser.Scene {
       }
     }
 
-    if (state.canAgeUp || state.aging) {
-      this.ageBtn.setVisible(true);
-      this.ageBtnLabel.setVisible(true);
-      if (state.aging) {
-        this.ageBtnLabel.setText(`AGING\n${Math.floor(state.ageChannelPct * 100)}%`);
-        this.ageBtn.setFillStyle(Palette.imperial);
-        this.ageBtnLabel.setColor('#1A2A22');
-      } else {
-        this.ageBtnLabel.setText(`AGE UP\n${state.ageCostWood}W ${state.ageCostGold}G`);
-        const can = state.wood >= state.ageCostWood && state.gold >= state.ageCostGold;
-        // Age gem: grey → bronze → silver → gold
-        this.ageBtn.setFillStyle(AGE_GEM[state.age]);
-        this.ageBtn.setStrokeStyle(2, can ? Palette.gold : Palette.stone);
-        this.ageBtn.setAlpha(can ? 1 : 0.55);
-        const gemDark = state.age === 'dark' || state.age === 'feudal';
-        this.ageBtnLabel.setColor(gemDark ? '#F0EBE0' : '#1A2A22');
-      }
-    } else {
-      this.ageBtn.setVisible(false);
-      this.ageBtnLabel.setVisible(false);
-    }
+    // Age Up lives on Keep research sheet — hide standalone dock button
+    this.ageBtn.setVisible(false);
+    this.ageBtnLabel.setVisible(false);
+    this.ageBtn.disableInteractive();
 
     if (state.wallUpgradeAvailable) {
       this.wallBtn.setVisible(true);
@@ -437,8 +421,8 @@ export class UIScene extends Phaser.Scene {
     this.pauseLabel.setText(state.paused ? '▶' : '❚❚');
 
     const inBuild = state.buildPhase && !state.paused;
-    this.startWaveBtn.setVisible(inBuild && !state.selectedPlaced);
-    this.startWaveLabel.setVisible(inBuild && !state.selectedPlaced);
+    this.startWaveBtn.setVisible(inBuild && !state.selectedPlaced && !state.selectedKeep);
+    this.startWaveLabel.setVisible(inBuild && !state.selectedPlaced && !state.selectedKeep);
     this.buildCountdownText.setVisible(inBuild);
     this.incomingBanner.setVisible(inBuild && !!state.nextEdge);
     if (inBuild) {
@@ -455,10 +439,10 @@ export class UIScene extends Phaser.Scene {
         this.incomingBanner.setText(`⚔ Incoming ${side}`);
       }
       this.tipText.setText('Tap wall to repair · Tap BREACH to rebuild');
-      this.tipText.setVisible(!state.selectedPlaced);
+      this.tipText.setVisible(!state.selectedPlaced && !state.selectedKeep);
     } else {
-      this.tipText.setText('Hold dock · drag to place · lift to commit');
-      this.tipText.setVisible(!state.selectedPlaced);
+      this.tipText.setText('Tap Keep to age / research · Hold dock to place');
+      this.tipText.setVisible(!state.selectedPlaced && !state.selectedKeep);
     }
 
     this.updateBottomSheet(state);
@@ -475,14 +459,17 @@ export class UIScene extends Phaser.Scene {
     }
   };
 
-  /** Thumb HUD: selected-tower bottom sheet — Upgrade + Sell/Undo */
+  /** Thumb HUD: tower upgrades OR Keep research hall */
   private updateBottomSheet(state: GameHudState): void {
+    if (state.selectedKeep) {
+      this.updateKeepSheet(state);
+      return;
+    }
     if (!state.selectedPlaced) {
       if (this.panel) {
         const dead = this.panel;
         this.panel = undefined;
         this.sheetKey = '';
-        // Defer destroy so we never rip interactives mid-pointer dispatch (iOS)
         this.time.delayedCall(0, () => {
           if (dead.active) dead.destroy(true);
         });
@@ -492,6 +479,7 @@ export class UIScene extends Phaser.Scene {
 
     const sp = state.selectedPlaced;
     const key = [
+      'tower',
       sp.id,
       sp.kills,
       sp.ranks.rof,
@@ -506,6 +494,8 @@ export class UIScene extends Phaser.Scene {
       sp.costs.rof?.wood ?? -1,
       sp.costs.range?.wood ?? -1,
       sp.costs.damage?.wood ?? -1,
+      state.wood,
+      state.gold,
     ].join('|');
     if (this.panel && key === this.sheetKey) return;
     this.sheetKey = key;
@@ -514,7 +504,6 @@ export class UIScene extends Phaser.Scene {
       this.panel = undefined;
     }
 
-    // Sit above dock tray for thumb reach
     const c = this.add.container(GAME_W / 2, GAME_H - 188).setDepth(150);
     const bg = this.add
       .rectangle(0, 0, 370, 100, Palette.hudPanel, 0.97)
@@ -534,7 +523,8 @@ export class UIScene extends Phaser.Scene {
       const x = -115 + i * 78;
       const rank = sp.ranks[track];
       const cost = sp.costs[track];
-      const can = sp.can[track];
+      const can = sp.can[track] && !!cost && state.wood >= cost.wood && state.gold >= cost.gold;
+      const unlocked = sp.can[track];
       const btn = this.add
         .rectangle(x, 8, 72, 44, can ? Palette.ochreDark : Palette.slate)
         .setStrokeStyle(1, can ? Palette.ochre : Palette.stone)
@@ -554,10 +544,10 @@ export class UIScene extends Phaser.Scene {
         )
         .setOrigin(0.5);
       btn.on('pointerup', () => this.gameScene.tryUpgradeTrack(track));
+      if (!unlocked && rank < 3) btn.setAlpha(0.55);
       btns.push(btn, label);
     });
 
-    // Sell / Undo — Rift Riff style undo when fresh
     const sellX = 148;
     const sellBtn = this.add
       .rectangle(sellX, 8, 64, 44, sp.canUndo ? Palette.feudal : Palette.blood)
@@ -584,12 +574,168 @@ export class UIScene extends Phaser.Scene {
       .text(170, -38, '✕', { fontSize: '16px', color: '#A0A090', fontFamily: 'system-ui' })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    // Expand hit area
     close.setPadding(8, 8, 8, 8);
     close.on('pointerup', () => this.gameScene.clearPlacedSelection());
     btns.push(close);
 
     c.add(btns);
+    this.panel = c;
+  }
+
+  private updateKeepSheet(state: GameHudState): void {
+    const sk = state.selectedKeep!;
+    const key = [
+      'keep',
+      sk.tab,
+      sk.keepHp,
+      sk.keepMaxHp,
+      sk.aging ? 1 : 0,
+      Math.floor(sk.ageChannelPct * 20),
+      sk.canAgeUp ? 1 : 0,
+      sk.ageCostWood,
+      sk.ageCostGold,
+      state.wood,
+      state.gold,
+      ...sk.attack.map((a) => `${a.id}:${a.owned?1:0}:${a.available?1:0}:${a.affordable?1:0}`),
+      ...sk.defense.map((a) => `${a.id}:${a.owned?1:0}:${a.available?1:0}:${a.affordable?1:0}`),
+      ...sk.siege.map((a) => `${a.id}:${a.owned?1:0}:${a.available?1:0}:${a.affordable?1:0}`),
+    ].join('|');
+    if (this.panel && key === this.sheetKey) return;
+    this.sheetKey = key;
+    if (this.panel) {
+      this.panel.destroy(true);
+      this.panel = undefined;
+    }
+
+    const c = this.add.container(GAME_W / 2, GAME_H - 210).setDepth(150);
+    const bg = this.add
+      .rectangle(0, 0, 380, 148, Palette.hudPanel, 0.98)
+      .setStrokeStyle(2, Palette.ochre);
+    const title = this.add
+      .text(-180, -60, `Keep · ${sk.keepHp}/${sk.keepMaxHp} HP`, {
+        fontSize: '13px',
+        color: '#C4A35A',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5);
+    const kids: Phaser.GameObjects.GameObject[] = [bg, title];
+
+    const tabs: { id: KeepTab; label: string }[] = [
+      { id: 'age', label: 'Age' },
+      { id: 'attack', label: 'Atk' },
+      { id: 'defense', label: 'Def' },
+      { id: 'siege', label: 'Siege' },
+    ];
+    tabs.forEach((tab, i) => {
+      const x = -130 + i * 70;
+      const on = sk.tab === tab.id;
+      const btn = this.add
+        .rectangle(x, -34, 64, 24, on ? Palette.ochreDark : Palette.slate)
+        .setStrokeStyle(1, on ? Palette.gold : Palette.stone)
+        .setInteractive({ useHandCursor: true });
+      const lab = this.add
+        .text(x, -34, tab.label, {
+          fontSize: '11px',
+          color: on ? '#F0EBE0' : '#A0A090',
+          fontFamily: 'system-ui',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5);
+      btn.on('pointerup', () => this.gameScene.setKeepSheetTab(tab.id));
+      kids.push(btn, lab);
+    });
+
+    if (sk.tab === 'age') {
+      if (sk.aging) {
+        const lab = this.add
+          .text(0, 20, `Channeling… ${Math.floor(sk.ageChannelPct * 100)}%`, {
+            fontSize: '14px',
+            color: '#D4A84B',
+            fontFamily: 'system-ui',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0.5);
+        kids.push(lab);
+      } else if (sk.canAgeUp && sk.nextAgeName) {
+        const can = state.wood >= sk.ageCostWood && state.gold >= sk.ageCostGold;
+        const btn = this.add
+          .rectangle(0, 18, 200, 48, AGE_GEM[state.age])
+          .setStrokeStyle(2, can ? Palette.gold : Palette.stone)
+          .setAlpha(can ? 1 : 0.55)
+          .setInteractive({ useHandCursor: true });
+        const gemDark = state.age === 'dark' || state.age === 'feudal';
+        const lab = this.add
+          .text(0, 18, `AGE UP → ${sk.nextAgeName}\n${sk.ageCostWood}W ${sk.ageCostGold}G`, {
+            fontSize: '12px',
+            color: gemDark ? '#F0EBE0' : '#1A2A22',
+            fontFamily: 'system-ui',
+            align: 'center',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0.5);
+        btn.on('pointerup', () => this.gameScene.tryAgeUp());
+        kids.push(btn, lab);
+      } else {
+        const lab = this.add
+          .text(0, 18, 'Imperial Age — max', {
+            fontSize: '13px',
+            color: '#A0A090',
+            fontFamily: 'system-ui',
+          })
+          .setOrigin(0.5);
+        kids.push(lab);
+      }
+    } else {
+      const rows =
+        sk.tab === 'attack' ? sk.attack : sk.tab === 'defense' ? sk.defense : sk.siege;
+      rows.forEach((item, i) => {
+        const x = -135 + (i % 4) * 90;
+        const y = 8 + Math.floor(i / 4) * 52;
+        const stub = !!item.stub;
+        const owned = item.owned;
+        const can = !stub && item.affordable;
+        const locked = !stub && !owned && !item.available;
+        let fill: number = Palette.slate;
+        if (owned) fill = Palette.forest;
+        else if (can) fill = Palette.ochreDark;
+        else if (stub || locked) fill = 0x3a4038;
+        const btn = this.add
+          .rectangle(x, y, 84, 44, fill)
+          .setStrokeStyle(1, can ? Palette.gold : owned ? Palette.ochre : Palette.stone)
+          .setAlpha(stub || locked ? 0.45 : 1);
+        if (!stub && !owned) btn.setInteractive({ useHandCursor: true });
+        const costLine = stub
+          ? 'Soon'
+          : owned
+            ? 'OWNED'
+            : locked
+              ? 'Locked'
+              : `${item.wood}W ${item.gold}G`;
+        const lab = this.add
+          .text(x, y, `${item.short}\n${costLine}`, {
+            fontSize: '9px',
+            color: '#F0EBE0',
+            fontFamily: 'system-ui',
+            align: 'center',
+          })
+          .setOrigin(0.5);
+        if (!stub && !owned) {
+          btn.on('pointerup', () => this.gameScene.tryKeepResearch(item.id));
+        }
+        kids.push(btn, lab);
+      });
+    }
+
+    const close = this.add
+      .text(172, -60, '✕', { fontSize: '16px', color: '#A0A090', fontFamily: 'system-ui' })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    close.setPadding(8, 8, 8, 8);
+    close.on('pointerup', () => this.gameScene.clearPlacedSelection());
+    kids.push(close);
+
+    c.add(kids);
     this.panel = c;
   }
 

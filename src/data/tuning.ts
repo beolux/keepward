@@ -19,16 +19,49 @@ export const TUNING = {
     perAgeBonus: 0.25,
   },
 
-  /** Keep */
+  /** Keep — base shot; Attack tree overrides via keepResearch */
   keep: {
     hp: 1000,
     autoDamage: 3,
-    autoFireRateSec: 0.5, // 0.5/s → interval 2000ms? Sheet: "3 dmg 0.5/s" = 3 dmg twice per second → interval 2000ms if 0.5 shots/s, OR 0.5s interval.
-    // Interpreting "3 dmg 0.5/s" as 3 damage at 0.5 shots per second (every 2s).
-    // If meant 3 dmg every 0.5s, that would be written "3 dmg / 0.5s". Using 0.5 shots/sec.
+    autoFireRateSec: 0.5,
     autoIntervalMs: 2000,
     autoRangeTiles: 2.0,
+    /** Aura ring (War Drums / Sharpened / Pavise) — show only when Keep selected */
+    auraRangeTiles: 3.5,
     bodyRadius: 28,
+  },
+
+  /**
+   * Keep research hall — Ideas Guy keep1 EXACT costs (easy to swap).
+   * Age gates availability; research spends to unlock. Age does NOT gift siege towers.
+   * Keep upgrades cost more than a tower kill-rank.
+   */
+  keepResearch: {
+    attack: {
+      /** A1 Keep Bolts: shot 6 / 0.6 RoF */
+      a1: { wood: 220, gold: 180, damage: 6, fireRatePerSec: 0.6 },
+      /** A2 Barrage: Keep RoF +40% */
+      a2: { wood: 300, gold: 260, keepRofBonus: 0.4 },
+      /** A3 War Drums: +12% RoF aura (needs A1) */
+      a3: { wood: 380, gold: 320, auraRof: 0.12 },
+      /** A4 Sharpened: +15% dmg aura (needs A1) */
+      a4: { wood: 420, gold: 360, auraDmg: 0.15 },
+    },
+    defense: {
+      d1: { wood: 200, gold: 160, hp: 1400 },
+      d2: { wood: 320, gold: 280, hp: 1900 },
+      /** Mason Guild: repair −30% (Castle) */
+      d3: { wood: 360, gold: 300, repairDiscount: 0.3 },
+      /** Tower Pavise: +15% tower HP in aura (Castle) */
+      d4: { wood: 400, gold: 340, towerHpAura: 0.15 },
+    },
+    siege: {
+      longbow: { wood: 200, gold: 150, age: 'feudal' as const },
+      spearPost: { wood: 180, gold: 120, age: 'feudal' as const },
+      mangonel: { wood: 280, gold: 220, age: 'castle' as const },
+      /** Bombard later — stub */
+      bombard: { wood: 0, gold: 0, age: 'imperial' as const, stub: true as const },
+    },
   },
 
   /** Wall HP baseline per segment by age (age-up applies rules in FortSystem). */

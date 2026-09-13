@@ -18,6 +18,8 @@ export class WallSegment {
   hitZone: Phaser.GameObjects.Zone;
   /** Soft glow under wall when incoming on this side */
   incomingGlow: Phaser.GameObjects.Graphics;
+  private pipGfx: Phaser.GameObjects.Graphics;
+  private pipMode: 'none' | 'gold' | 'silver' = 'none';
   private scene: Phaser.Scene;
   private hpHideEvent?: Phaser.Time.TimerEvent;
   private buildHint = false;
@@ -32,6 +34,7 @@ export class WallSegment {
     this.maxHp = hp;
 
     this.incomingGlow = scene.add.graphics().setDepth(14).setAlpha(0);
+    this.pipGfx = scene.add.graphics().setDepth(18);
     this.gfx = scene.add.graphics().setDepth(15);
     this.hpText = scene.add
       .text(def.breachPoint.x, def.breachPoint.y, '', {
@@ -275,7 +278,11 @@ export class WallSegment {
     );
   }
 
-  repairChunk(age: AgeId): { wood: number; gold: number; healed: number } | null {
+  /** @param repairDiscount 0–1 fraction off (Mason Guild = 0.3) */
+  repairChunk(
+    age: AgeId,
+    repairDiscount = 0,
+  ): { wood: number; gold: number; healed: number } | null {
     if (this.breached || this.rebuilding) return null;
     const chunk = Math.min(TUNING.repair.chunkHp, this.maxHp - this.hp);
     if (chunk <= 0) return null;
@@ -283,10 +290,39 @@ export class WallSegment {
       age === 'castle' || age === 'imperial'
         ? TUNING.repair.castleImperial
         : TUNING.repair.darkFeudal;
+    const mult = Math.max(0, 1 - repairDiscount);
+    const wood = Math.max(1, Math.floor(cost.wood * mult));
+    const gold = Math.max(1, Math.floor(cost.gold * mult));
     this.hp = Math.min(this.maxHp, this.hp + chunk);
     this.redraw(this.stone);
     this.showHpBrief(1200);
-    return { wood: cost.wood, gold: cost.gold, healed: chunk };
+    return { wood, gold, healed: chunk };
+  }
+
+  /** Gold pip = wall upgrade affordable; silver = both wall upgs done */
+  setUpgradePip(mode: 'none' | 'gold' | 'silver'): void {
+    if (this.pipMode === mode) return;
+    this.pipMode = mode;
+    const g = this.pipGfx;
+    g.clear();
+    if (mode === 'none') return;
+    const x = this.def.breachPoint.x;
+    const y = this.def.breachPoint.y - 14;
+    if (mode === 'gold') {
+      g.fillStyle(Palette.gold, 0.9);
+      g.fillCircle(x, y, 3.5);
+      g.fillStyle(Palette.ochre, 0.65);
+      g.fillCircle(x - 1, y - 1, 1.5);
+    } else {
+      g.fillStyle(Palette.stoneLight, 0.85);
+      g.fillCircle(x, y, 3.5);
+      g.lineStyle(1.2, Palette.slate, 1);
+      g.beginPath();
+      g.moveTo(x - 2, y);
+      g.lineTo(x - 0.3, y + 1.6);
+      g.lineTo(x + 2.4, y - 2);
+      g.strokePath();
+    }
   }
 
   /** Begin rebuild channel (caller pays cost). Completes via finishRebuild. */
@@ -311,6 +347,7 @@ export class WallSegment {
     this.hpHideEvent?.remove(false);
     this.scene.tweens.killTweensOf(this.incomingGlow);
     this.incomingGlow.destroy();
+    this.pipGfx.destroy();
     this.gfx.destroy();
     this.hpText.destroy();
     this.hitZone.destroy();

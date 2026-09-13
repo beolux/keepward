@@ -3,7 +3,19 @@ import { Palette } from '../data/palette';
 import { TOWERS, type TowerId, type UpgradeTrack } from '../data/towers';
 import { WAVES } from '../data/waves';
 import { AGES, AGE_ORDER, ageIndex, passiveMult, type AgeId } from '../data/ages';
-import { TUNING } from '../data/tuning';
+import { TUNING, TILE_PX } from '../data/tuning';
+import {
+  ATTACK_DEFS,
+  DEFENSE_DEFS,
+  SIEGE_DEFS,
+  blankKeepResearch,
+  keepMaxHpFor,
+  ownsResearch,
+  researchAvailable,
+  type KeepResearchId,
+  type KeepResearchState,
+  type KeepTab,
+} from '../data/keepResearch';
 import { LAYOUT_ORDER, SPAWN_EDGES, edgeSpawnPoints, type LayoutId } from '../data/fort';
 import { TowerUnit, PlacementGhost } from '../entities/Tower';
 import { EnemyUnit } from '../entities/Enemy';
@@ -50,6 +62,22 @@ export type GameHudState = {
     canUndo: boolean;
     sellWood: number;
     sellGold: number;
+  } | null;
+  /** Keep research hall sheet */
+  selectedKeep: {
+    tab: KeepTab;
+    keepHp: number;
+    keepMaxHp: number;
+    research: KeepResearchState;
+    attack: { id: KeepResearchId; name: string; short: string; desc: string; wood: number; gold: number; owned: boolean; available: boolean; affordable: boolean; stub?: boolean }[];
+    defense: { id: KeepResearchId; name: string; short: string; desc: string; wood: number; gold: number; owned: boolean; available: boolean; affordable: boolean; stub?: boolean }[];
+    siege: { id: KeepResearchId; name: string; short: string; desc: string; wood: number; gold: number; owned: boolean; available: boolean; affordable: boolean; stub?: boolean }[];
+    canAgeUp: boolean;
+    ageCostWood: number;
+    ageCostGold: number;
+    aging: boolean;
+    ageChannelPct: number;
+    nextAgeName: string | null;
   } | null;
   wallUpgradeAvailable: 'hardenedTimbers' | 'stoneFacing' | null;
   muted: boolean;
@@ -100,6 +128,9 @@ export class GameScene extends Phaser.Scene {
   private keepHpBar!: Phaser.GameObjects.Graphics;
   private keepHpLabel!: Phaser.GameObjects.Text;
   private keepHpVisibleUntil = 0;
+  private keepMaxHp: number = TUNING.keep.hp;
+  private keepResearch: KeepResearchState = blankKeepResearch();
+  private keepSheetTab: KeepTab = 'age';
   private pointerDown = false;
   private dockDragging = false;
   /** Ignore tower taps right after place (same touch / iOS synthetic click) */
@@ -128,6 +159,9 @@ export class GameScene extends Phaser.Scene {
     this.wood = TUNING.start.wood;
     this.gold = TUNING.start.gold;
     this.keepHp = TUNING.keep.hp;
+    this.keepMaxHp = TUNING.keep.hp;
+    this.keepResearch = blankKeepResearch();
+    this.keepSheetTab = 'age';
     this.waveIndex = 0;
     this.age = 'dark';
     this.selectedTower = 'watchtower';
@@ -167,7 +201,12 @@ export class GameScene extends Phaser.Scene {
 
     this.keepTower = new TowerUnit(this, this.fort.keepPos.x, this.fort.keepPos.y, 'keep');
     this.keepTower.setAgeVisual(this.age);
+    this.keepTower.setKeepResearch(this.keepResearch);
     this.towers.push(this.keepTower);
+    this.time.delayedCall(100, () => {
+      if (!this.keepTower?.active) return;
+      this.keepTower.enableTap(() => this.selectPlacedTower(this.keepTower));
+    });
 
     this.keepHpBar = this.add.graphics().setDepth(26).setAlpha(0);
     this.keepHpLabel = this.add
@@ -265,7 +304,7 @@ export class GameScene extends Phaser.Scene {
     const x = this.fort.keepPos.x;
     const y = this.fort.keepPos.y - 40;
     const w = 56;
-    const pct = Math.max(0, this.keepHp / TUNING.keep.hp);
+    const pct = Math.max(0, this.keepHp / this.keepMaxHp);
     g.fillStyle(0x000000, 0.5);
     g.fillRect(x - w / 2, y, w, 6);
     g.fillStyle(pct > 0.35 ? Palette.ochre : Palette.blood, 1);
@@ -289,7 +328,7 @@ export class GameScene extends Phaser.Scene {
     if (this.paused || this.status !== 'playing') return;
     const def = TOWERS[id];
     if (!def.buildable) return;
-    if (def.unlockAge === 'feudal' && ageIndex(this.age) < ageIndex('feudal')) return;
+    if (!this.isTowerUnlocked(id)) return;
     this.clearPlacedSelection();
     this.selectedTower = id;
     this.placing = true;
@@ -454,7 +493,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.selectedTower) return false;
     const def = TOWERS[this.selectedTower];
     if (!def.buildable) return false;
-    if (def.unlockAge === 'feudal' && ageIndex(this.age) < ageIndex('feudal')) return false;
+    if (!this.isTowerUnlocked(this.selectedTower)) return false;
     if (this.wood < def.costWood || this.gold < def.costGold) {
       this.game.events.emit('keepward-toast', 'Not enough resources');
       return false;
@@ -487,6 +526,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.towers.push(tower);
     this.lastPlaced = tower;
+    this.refreshAuraBuffs();
     this.completeTeach();
     // Defer HUD / audio / FX / toast OFF the pointerup stack
     const px = x;
@@ -501,15 +541,163 @@ export class GameScene extends Phaser.Scene {
   }
 
   selectPlacedTower(tower: TowerUnit): void {
-    if (tower.towerId === 'keep') return;
     if (this.placing || this.dockDragging) return;
     if (this.time.now < this.placeTapIgnoreUntil) return;
     audio.unlock();
     for (const t of this.towers) t.showRange(false);
     this.selectedPlaced = tower;
-    tower.showRange(true);
+    if (tower.towerId === 'keep') {
+      const auraR = TUNING.keep.auraRangeTiles * TILE_PX;
+      tower.showRange(true, auraR);
+      this.keepSheetTab = 'age';
+    } else {
+      tower.showRange(true);
+    }
     this.selectedTower = null;
     this.emitHud();
+  }
+
+  setKeepSheetTab(tab: KeepTab): void {
+    this.keepSheetTab = tab;
+    this.emitHud();
+  }
+
+  isTowerUnlocked(id: TowerId): boolean {
+    if (id === 'watchtower' || id === 'keep') return true;
+    if (id === 'longbow') return this.keepResearch.longbow;
+    if (id === 'spearPost') return this.keepResearch.spearPost;
+    if (id === 'mangonel') return this.keepResearch.mangonel;
+    return false;
+  }
+
+  getUnlockedTowers(): string[] {
+    const u = ['watchtower'];
+    if (this.keepResearch.longbow) u.push('longbow');
+    if (this.keepResearch.spearPost) u.push('spearPost');
+    if (this.keepResearch.mangonel) u.push('mangonel');
+    return u;
+  }
+
+  refreshAuraBuffs(): void {
+    const auraR = TUNING.keep.auraRangeTiles * TILE_PX;
+    const rof = this.keepResearch.a3 ? TUNING.keepResearch.attack.a3.auraRof : 0;
+    const dmg = this.keepResearch.a4 ? TUNING.keepResearch.attack.a4.auraDmg : 0;
+    const hp = this.keepResearch.d4 ? TUNING.keepResearch.defense.d4.towerHpAura : 0;
+    for (const t of this.towers) {
+      if (t.towerId === 'keep') {
+        t.auraRofBonus = 0;
+        t.auraDmgBonus = 0;
+        t.auraHpBonus = 0;
+        t.setKeepResearch(this.keepResearch);
+        continue;
+      }
+      const d = Phaser.Math.Distance.Between(t.x, t.y, this.keepTower.x, this.keepTower.y);
+      const inAura = d <= auraR;
+      t.auraRofBonus = inAura ? rof : 0;
+      t.auraDmgBonus = inAura ? dmg : 0;
+      t.auraHpBonus = inAura ? hp : 0;
+      t.recomputeStats();
+    }
+  }
+
+  tryKeepResearch(id: KeepResearchId): void {
+    if (this.paused || this.status !== 'playing') return;
+    const def =
+      ATTACK_DEFS.find((d) => d.id === id) ||
+      DEFENSE_DEFS.find((d) => d.id === id) ||
+      SIEGE_DEFS.find((d) => d.id === id);
+    if (!def || def.stub) return;
+    if (!researchAvailable(def, this.keepResearch, this.age)) {
+      this.game.events.emit('keepward-toast', 'Locked');
+      audio.play('deny');
+      return;
+    }
+    if (this.wood < def.costWood || this.gold < def.costGold) {
+      this.game.events.emit('keepward-toast', 'Not enough resources');
+      audio.play('deny');
+      return;
+    }
+    this.wood -= def.costWood;
+    this.gold -= def.costGold;
+    (this.keepResearch as Record<KeepResearchId, boolean>)[id] = true;
+
+    // Defense HP bumps
+    if (id === 'd1' || id === 'd2') {
+      const prev = this.keepMaxHp;
+      this.keepMaxHp = keepMaxHpFor(this.keepResearch);
+      this.keepHp += this.keepMaxHp - prev;
+      this.drawKeepHp();
+      this.showKeepHp();
+    }
+
+    this.refreshAuraBuffs();
+    audio.play('upgrade');
+    this.game.events.emit('keepward-toast', `${def.name} researched`);
+    this.emitHud();
+  }
+
+  /** Refresh gold/silver pips on towers + walls */
+  refreshUpgradePips(): void {
+    const w = this.wood;
+    const g = this.gold;
+    for (const t of this.towers) {
+      if (t.towerId === 'keep') {
+        // Keep pip: any affordable research OR age-up
+        let gold = false;
+        let anyLeft = false;
+        for (const def of [...ATTACK_DEFS, ...DEFENSE_DEFS, ...SIEGE_DEFS]) {
+          if (def.stub) continue;
+          if (ownsResearch(this.keepResearch, def.id)) continue;
+          anyLeft = true;
+          if (researchAvailable(def, this.keepResearch, this.age) && w >= def.costWood && g >= def.costGold) {
+            gold = true;
+            break;
+          }
+        }
+        const nextIdx = AGE_ORDER.indexOf(this.age) + 1;
+        if (nextIdx < AGE_ORDER.length && !this.aging) {
+          anyLeft = true;
+          const na = AGES[AGE_ORDER[nextIdx]];
+          if (w >= na.costWood && g >= na.costGold) gold = true;
+        }
+        if (t.selected) t.setUpgradePip('none');
+        else if (gold) t.setUpgradePip('gold');
+        else if (!anyLeft) t.setUpgradePip('silver');
+        else t.setUpgradePip('none');
+        continue;
+      }
+      if (t.selected) {
+        t.setUpgradePip('none');
+      } else if (t.hasAffordableUpgrade(w, g)) {
+        t.setUpgradePip('gold');
+      } else if (t.isFullyUpgraded()) {
+        t.setUpgradePip('silver');
+      } else {
+        t.setUpgradePip('none');
+      }
+    }
+
+    // Wall upgrade pips on segments
+    let wallGold = false;
+    let wallMaxed = this.fort.hardened && this.fort.stoneFaced;
+    let wallAvail: 'hardenedTimbers' | 'stoneFacing' | null = null;
+    if (ageIndex(this.age) >= ageIndex('feudal') && !this.fort.hardened) {
+      wallAvail = 'hardenedTimbers';
+    } else if (ageIndex(this.age) >= ageIndex('castle') && !this.fort.stoneFaced) {
+      wallAvail = 'stoneFacing';
+    }
+    if (wallAvail) {
+      const u =
+        wallAvail === 'hardenedTimbers'
+          ? TUNING.wallUpgrades.hardenedTimbers
+          : TUNING.wallUpgrades.stoneFacing;
+      wallGold = w >= u.costWood && g >= u.costGold;
+    }
+    for (const seg of this.fort.segments.values()) {
+      if (wallGold) seg.setUpgradePip('gold');
+      else if (wallMaxed) seg.setUpgradePip('silver');
+      else seg.setUpgradePip('none');
+    }
   }
 
   clearPlacedSelection(): void {
@@ -528,6 +716,7 @@ export class GameScene extends Phaser.Scene {
 
   tryUpgradeTrack(track: UpgradeTrack): void {
     if (!this.selectedPlaced || this.paused || this.status !== 'playing') return;
+    if (this.selectedPlaced.towerId === 'keep') return;
     const t = this.selectedPlaced;
     if (!t.canUnlockRank(track)) {
       this.game.events.emit('keepward-toast', `Need ${t.killsNeededForNext(track)} kills`);
@@ -552,6 +741,7 @@ export class GameScene extends Phaser.Scene {
   /** Sell selected tower (50%) or Undo last place (full refund within window) */
   sellOrUndoSelected(): void {
     if (!this.selectedPlaced || this.paused || this.status !== 'playing') return;
+    if (this.selectedPlaced.towerId === 'keep') return;
     const t = this.selectedPlaced;
     const canUndo =
       this.lastPlaced === t && this.time.now - t.placedAt <= UNDO_MS && t.kills === 0;
@@ -657,7 +847,8 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
-    const result = seg.repairChunk(this.age);
+    const discount = this.keepResearch.d3 ? TUNING.keepResearch.defense.d3.repairDiscount : 0;
+    const result = seg.repairChunk(this.age, discount);
     if (!result) {
       this.game.events.emit('keepward-toast', 'Cannot repair now');
       return;
@@ -752,7 +943,43 @@ export class GameScene extends Phaser.Scene {
     }
 
     let selectedPlaced: GameHudState['selectedPlaced'] = null;
-    if (this.selectedPlaced) {
+    let selectedKeep: GameHudState['selectedKeep'] = null;
+    if (this.selectedPlaced && this.selectedPlaced.towerId === 'keep') {
+      const mapDefs = (defs: typeof ATTACK_DEFS) =>
+        defs.map((d) => {
+          const owned = ownsResearch(this.keepResearch, d.id);
+          const available = researchAvailable(d, this.keepResearch, this.age);
+          return {
+            id: d.id,
+            name: d.name,
+            short: d.short,
+            desc: d.desc,
+            wood: d.costWood,
+            gold: d.costGold,
+            owned,
+            available,
+            affordable: available && this.wood >= d.costWood && this.gold >= d.costGold,
+            stub: d.stub,
+          };
+        });
+      const nIdx = AGE_ORDER.indexOf(this.age) + 1;
+      const nAge = nIdx < AGE_ORDER.length ? AGES[AGE_ORDER[nIdx]] : null;
+      selectedKeep = {
+        tab: this.keepSheetTab,
+        keepHp: Math.ceil(this.keepHp),
+        keepMaxHp: this.keepMaxHp,
+        research: { ...this.keepResearch },
+        attack: mapDefs(ATTACK_DEFS),
+        defense: mapDefs(DEFENSE_DEFS),
+        siege: mapDefs(SIEGE_DEFS),
+        canAgeUp: !!nAge && !this.aging,
+        ageCostWood: nAge?.costWood ?? 0,
+        ageCostGold: nAge?.costGold ?? 0,
+        aging: this.aging,
+        ageChannelPct: this.aging ? this.ageChannel / TUNING.ageChannelMs : 0,
+        nextAgeName: nAge?.name ?? null,
+      };
+    } else if (this.selectedPlaced) {
       const t = this.selectedPlaced;
       const canUndo =
         this.lastPlaced === t && this.time.now - t.placedAt <= UNDO_MS && t.kills === 0;
@@ -782,7 +1009,7 @@ export class GameScene extends Phaser.Scene {
       wood: Math.floor(this.wood),
       gold: Math.floor(this.gold),
       keepHp: Math.ceil(this.keepHp),
-      keepMaxHp: TUNING.keep.hp,
+      keepMaxHp: this.keepMaxHp,
       wave: Math.min(this.waveIndex + 1, WAVES.length),
       maxWaves: WAVES.length,
       age: this.age,
@@ -796,11 +1023,12 @@ export class GameScene extends Phaser.Scene {
       placing: this.placing,
       paused: this.paused,
       status: this.status,
-      unlocked: AGES[this.age].unlocks,
+      unlocked: this.getUnlockedTowers(),
       layoutName: this.fort.layout.name,
       hardened: this.fort.hardened,
       stoneFaced: this.fort.stoneFaced,
       selectedPlaced,
+      selectedKeep,
       wallUpgradeAvailable,
       muted: audio.muted,
       teach: this.teachMsg,
@@ -814,6 +1042,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   emitHud(): void {
+    this.refreshUpgradePips();
     this.game.events.emit('keepward-hud', this.getHudState());
   }
 

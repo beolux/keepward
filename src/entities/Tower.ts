@@ -12,6 +12,8 @@ import {
 import type { AgeId } from '../data/ages';
 import { hasFrame, makeAtlasSprite } from '../art/atlas';
 import type { EnemyUnit } from './Enemy';
+import type { KeepResearchState } from '../data/keepResearch';
+import { keepVisualRank } from '../data/keepResearch';
 
 export class TowerUnit extends Phaser.GameObjects.Container {
   towerId: TowerId;
@@ -27,11 +29,23 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   investedGold = 0;
   placedAt = 0;
 
+  /** Aura buffs applied by Keep (towers in range only) */
+  auraRofBonus = 0;
+  auraDmgBonus = 0;
+  /** Tower Pavise — reserved durability mult (towers don't take dmg yet) */
+  auraHpBonus = 0;
+
   private bodyGfx: Phaser.GameObjects.Graphics;
+  private trimGfx: Phaser.GameObjects.Graphics;
+  private pipGfx: Phaser.GameObjects.Graphics;
   private bodySprite: Phaser.GameObjects.Image | null = null;
   private rangeRing: Phaser.GameObjects.Graphics;
   private hitZone: Phaser.GameObjects.Zone;
   private agedLook = false;
+  private keepResearch: KeepResearchState | null = null;
+  /** Override ring radius when Keep selected (aura) */
+  private ringOverride: number | null = null;
+  private pipMode: 'none' | 'gold' | 'silver' = 'none';
 
   constructor(scene: Phaser.Scene, x: number, y: number, towerId: TowerId) {
     super(scene, x, y);
@@ -47,12 +61,14 @@ export class TowerUnit extends Phaser.GameObjects.Container {
 
     this.rangeRing = scene.add.graphics();
     this.bodyGfx = scene.add.graphics();
-    this.add([this.rangeRing, this.bodyGfx]);
+    this.trimGfx = scene.add.graphics();
+    this.pipGfx = scene.add.graphics();
+    this.add([this.rangeRing, this.bodyGfx, this.trimGfx, this.pipGfx]);
     this.drawBody();
     this.drawRange(false);
     this.setDepth(25);
 
-    this.hitZone = scene.add.zone(0, 0, 48, 48);
+    this.hitZone = scene.add.zone(0, 0, towerId === 'keep' ? 56 : 48, towerId === 'keep' ? 56 : 48);
     this.add(this.hitZone);
 
     scene.add.existing(this);
@@ -60,6 +76,14 @@ export class TowerUnit extends Phaser.GameObjects.Container {
 
   get def() {
     return TOWERS[this.towerId];
+  }
+
+  /** Max kill-track rank 0–3 for look */
+  visualRank(): number {
+    if (this.towerId === 'keep' && this.keepResearch) {
+      return keepVisualRank(this.keepResearch);
+    }
+    return Math.max(this.ranks.rof, this.ranks.range, this.ranks.damage);
   }
 
   /** Age-up roof tint: thatch → slate. Does not change colliders/range. */
@@ -70,14 +94,33 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     this.drawBody();
   }
 
+  setKeepResearch(state: KeepResearchState): void {
+    this.keepResearch = state;
+    this.recomputeKeepStats();
+    this.drawBody();
+  }
+
   private currentFrame(): AtlasFrameId {
     const pair = TOWER_FRAME[this.towerId];
+    const rank = this.visualRank();
+    // Prefer rank-specific atlas frames when present; fall back to base/aged
+    if (rank >= 3) {
+      const r3 = `${pair.base}_r3` as AtlasFrameId;
+      if (hasFrame(this.scene, r3)) return r3;
+    } else if (rank >= 2) {
+      const r2 = `${pair.base}_r2` as AtlasFrameId;
+      if (hasFrame(this.scene, r2)) return r2;
+    } else if (rank >= 1) {
+      const r1 = `${pair.base}_r1` as AtlasFrameId;
+      if (hasFrame(this.scene, r1)) return r1;
+    }
     return this.agedLook ? pair.aged : pair.base;
   }
 
   private drawBody(): void {
     const g = this.bodyGfx;
     g.clear();
+    this.trimGfx.clear();
 
     const frame = this.currentFrame();
     if (hasFrame(this.scene, frame)) {
@@ -86,15 +129,51 @@ export class TowerUnit extends Phaser.GameObjects.Container {
         if (this.bodySprite) this.addAt(this.bodySprite, 1);
       }
       if (this.bodySprite) {
-        const o = FRAME_ORIGIN[frame];
+        const o = FRAME_ORIGIN[frame] ?? FRAME_ORIGIN[TOWER_FRAME[this.towerId].base];
         this.bodySprite.setTexture(ATLAS_KEY, frame);
         this.bodySprite.setOrigin(o.x, o.y);
         this.bodySprite.setVisible(true);
+        // Rank tint — readable at arm's length
+        const rank = this.visualRank();
+        if (rank >= 3) this.bodySprite.setTint(0xffe8a8);
+        else if (rank >= 2) this.bodySprite.setTint(0xfff0d0);
+        else if (rank >= 1) this.bodySprite.setTint(0xfff8e8);
+        else this.bodySprite.clearTint();
+        this.drawRankTrim(rank);
         return;
       }
     }
     if (this.bodySprite) this.bodySprite.setVisible(false);
     this.drawBodyProcedural(g);
+    this.drawRankTrim(this.visualRank());
+  }
+
+  /** Crenelation / gold trim by rank — same colliders */
+  private drawRankTrim(rank: number): void {
+    const t = this.trimGfx;
+    t.clear();
+    if (rank <= 0) return;
+    if (rank >= 1) {
+      // small ochre banner stub
+      t.fillStyle(Palette.ochreDark, 0.95);
+      t.fillRect(10, -22, 3, 10);
+      t.fillStyle(rank >= 3 ? Palette.gold : Palette.ochre, 1);
+      t.fillRect(13, -22, 7, 5);
+    }
+    if (rank >= 2) {
+      // gold band / trim
+      t.fillStyle(Palette.gold, 0.85);
+      t.fillRect(-12, 4, 24, 2);
+    }
+    if (rank >= 3) {
+      // crenelation pips — most capable
+      t.fillStyle(Palette.gold, 1);
+      for (let i = -10; i <= 6; i += 8) {
+        t.fillRect(i, -28, 5, 6);
+      }
+      t.lineStyle(1.5, Palette.gold, 0.9);
+      t.strokeCircle(0, -4, 14);
+    }
   }
 
   private drawBodyProcedural(g: Phaser.GameObjects.Graphics): void {
@@ -163,22 +242,67 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     g.fillRect(-2, -18, 4, 12);
   }
 
+  /**
+   * Upgrade pip: gold = affordable unlock now; silver check = all tracks maxed.
+   * Clears when selected / none.
+   */
+  setUpgradePip(mode: 'none' | 'gold' | 'silver'): void {
+    if (this.pipMode === mode) return;
+    this.pipMode = mode;
+    this.drawPip();
+  }
+
+  private drawPip(): void {
+    const g = this.pipGfx;
+    g.clear();
+    if (this.pipMode === 'none' || this.selected) return;
+    const ox = this.towerId === 'keep' ? 18 : 14;
+    const oy = this.towerId === 'keep' ? -30 : -26;
+    if (this.pipMode === 'gold') {
+      // subtle ochre spark
+      g.fillStyle(Palette.gold, 0.95);
+      g.fillCircle(ox, oy, 4.5);
+      g.fillStyle(Palette.ochre, 0.7);
+      g.fillCircle(ox - 1, oy - 1, 2);
+      g.lineStyle(1, Palette.ochreDark, 0.8);
+      g.strokeCircle(ox, oy, 4.5);
+    } else {
+      // silver check — maxed
+      g.fillStyle(Palette.stoneLight, 0.9);
+      g.fillCircle(ox, oy, 4.5);
+      g.lineStyle(1.5, Palette.slate, 1);
+      g.beginPath();
+      g.moveTo(ox - 2.5, oy);
+      g.lineTo(ox - 0.5, oy + 2);
+      g.lineTo(ox + 3, oy - 2.5);
+      g.strokePath();
+    }
+  }
+
   drawRange(show: boolean, ok = true): void {
     this.rangeRing.clear();
     if (!show && !this.selected) return;
     const color = ok ? Palette.rangeOk : Palette.rangeBad;
+    const r = this.ringOverride ?? this.range;
     this.rangeRing.lineStyle(2, color, 0.55);
-    this.rangeRing.strokeCircle(0, 0, this.range);
+    this.rangeRing.strokeCircle(0, 0, r);
     this.rangeRing.fillStyle(color, 0.08);
-    this.rangeRing.fillCircle(0, 0, this.range);
+    this.rangeRing.fillCircle(0, 0, r);
   }
 
-  showRange(show: boolean): void {
+  /** Keep selected → aura ring; towers → attack range */
+  showRange(show: boolean, ringRadius?: number): void {
     this.selected = show;
+    this.ringOverride = show && ringRadius != null ? ringRadius : null;
     this.drawRange(show, true);
+    this.drawPip(); // hide pip while selected
   }
 
   recomputeStats(): void {
+    if (this.towerId === 'keep') {
+      this.recomputeKeepStats();
+      return;
+    }
     const def = this.def;
     let rofBonus = 0;
     let rangeBonus = 0;
@@ -188,10 +312,33 @@ export class TowerUnit extends Phaser.GameObjects.Container {
     for (let i = 0; i < this.ranks.range; i++) rangeBonus += th.range[i] / 100;
     for (let i = 0; i < this.ranks.damage; i++) dmgBonus += th.damage[i];
 
+    rofBonus += this.auraRofBonus;
+    dmgBonus += this.auraDmgBonus;
+
     this.damage = def.damage * (1 + dmgBonus);
     this.range = def.range * (1 + rangeBonus);
     this.fireIntervalMs = def.fireIntervalMs / (1 + rofBonus);
     this.splash = def.splash;
+    if (this.selected) this.drawRange(true, true);
+    this.drawBody();
+  }
+
+  recomputeKeepStats(): void {
+    const def = this.def;
+    const kr = TUNING.keepResearch.attack;
+    let dmg = def.damage;
+    let interval = def.fireIntervalMs;
+    if (this.keepResearch?.a1) {
+      dmg = kr.a1.damage;
+      interval = 1000 / kr.a1.fireRatePerSec;
+    }
+    if (this.keepResearch?.a2) {
+      interval = interval / (1 + kr.a2.keepRofBonus);
+    }
+    this.damage = dmg;
+    this.fireIntervalMs = interval;
+    this.range = def.range;
+    this.splash = 0;
     if (this.selected) this.drawRange(true, true);
   }
 
@@ -202,8 +349,25 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   }
 
   canUnlockRank(track: UpgradeTrack): boolean {
+    if (this.towerId === 'keep') return false;
     const need = this.killsNeededForNext(track);
     return need !== null && this.kills >= need;
+  }
+
+  /** Any kill-track affordable given resources */
+  hasAffordableUpgrade(wood: number, gold: number): boolean {
+    if (this.towerId === 'keep') return false;
+    for (const track of ['rof', 'range', 'damage'] as UpgradeTrack[]) {
+      if (!this.canUnlockRank(track)) continue;
+      const c = this.upgradeCost(track);
+      if (c && wood >= c.wood && gold >= c.gold) return true;
+    }
+    return false;
+  }
+
+  isFullyUpgraded(): boolean {
+    if (this.towerId === 'keep') return false;
+    return this.ranks.rof >= 3 && this.ranks.range >= 3 && this.ranks.damage >= 3;
   }
 
   upgradeCost(track: UpgradeTrack): { wood: number; gold: number } | null {

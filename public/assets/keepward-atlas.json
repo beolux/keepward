@@ -360,6 +360,366 @@
         "y": 0.78
       }
     },
+    "keep_r1": {
+      "frame": {
+        "x": 168,
+        "y": 40,
+        "w": 80,
+        "h": 96
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 96
+      },
+      "sourceSize": {
+        "w": 80,
+        "h": 96
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "keep_r2": {
+      "frame": {
+        "x": 252,
+        "y": 40,
+        "w": 80,
+        "h": 96
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 96
+      },
+      "sourceSize": {
+        "w": 80,
+        "h": 96
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "keep_r3": {
+      "frame": {
+        "x": 336,
+        "y": 40,
+        "w": 80,
+        "h": 96
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 96
+      },
+      "sourceSize": {
+        "w": 80,
+        "h": 96
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.72
+      }
+    },
+    "tower_watchtower_r1": {
+      "frame": {
+        "x": 136,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_watchtower_r2": {
+      "frame": {
+        "x": 204,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_watchtower_r3": {
+      "frame": {
+        "x": 272,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_longbow_r1": {
+      "frame": {
+        "x": 340,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_longbow_r2": {
+      "frame": {
+        "x": 408,
+        "y": 230,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_longbow_r3": {
+      "frame": {
+        "x": 0,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_spearPost_r1": {
+      "frame": {
+        "x": 68,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.82
+      }
+    },
+    "tower_spearPost_r2": {
+      "frame": {
+        "x": 136,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.82
+      }
+    },
+    "tower_spearPost_r3": {
+      "frame": {
+        "x": 204,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.82
+      }
+    },
+    "tower_mangonel_r1": {
+      "frame": {
+        "x": 272,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_mangonel_r2": {
+      "frame": {
+        "x": 340,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
+    "tower_mangonel_r3": {
+      "frame": {
+        "x": 408,
+        "y": 400,
+        "w": 64,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.78
+      }
+    },
     "unit_militia": {
       "frame": {
         "x": 0,
@@ -507,12 +867,12 @@
   },
   "meta": {
     "app": "keepward-generate-atlas",
-    "version": "art2",
+    "version": "keep1",
     "image": "keepward-atlas.png",
     "format": "RGBA8888",
     "size": {
       "w": 512,
-      "h": 512
+      "h": 640
     },
     "scale": "1"
   }

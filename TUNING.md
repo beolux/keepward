@@ -77,3 +77,41 @@ See `TUNING.enemies` in `tuning.ts`. Wall DPS + bounties are sheet-pinned.
 - Timer: 13s waves 1–20, 10s from wave 21+
 - Thumb **Start Wave** skips timer
 - Incoming-side tell: glow + chevron + dust on next spawn edge
+
+
+## Keep research (keep1)
+Keep is the research hall. Tap Keep → Age · Attack · Defense · Siege.
+Age gates availability; research spends to unlock. **Age does NOT gift** Longbow / Spear / Mangonel.
+
+### Age-up (unchanged)
+Feudal 150W+80G · Castle 320W+220G · Imperial 500W+400G · 4s channel
+
+### Siege (one-time)
+| Unlock | Age | Cost |
+|--------|-----|------|
+| Longbow | Feudal | 200W+150G |
+| Spear | Feudal | 180W+120G |
+| Mangonel | Castle | 280W+220G |
+| Watchtower | Dark | free |
+| Bombard | later | stub |
+
+### Attack
+| Id | Effect | Cost |
+|----|--------|------|
+| A1 Keep Bolts | shot 6 / 0.6 RoF | 220W+180G |
+| A2 Barrage | Keep RoF +40% | 300W+260G |
+| A3 War Drums | +12% RoF aura (needs A1) | 380W+320G |
+| A4 Sharpened | +15% dmg aura (needs A1) | 420W+360G |
+Aura 3.5 tiles — ring only when Keep selected; buffs towers inside.
+
+### Defense
+| Id | Effect | Cost |
+|----|--------|------|
+| D1 | Keep HP → 1400 | 200W+160G |
+| D2 | → 1900 (needs D1) | 320W+280G |
+| D3 Mason Guild | repair −30% (Castle) | 360W+300G |
+| D4 Tower Pavise | +15% tower HP in aura (Castle) | 400W+340G |
+
+### Pips / ranks
+- Gold pip = affordable upgrade now; silver check = maxed. Clears on tap.
+- Kill-rank looks (trim/crenelation) + Keep research rank art. Same colliders.

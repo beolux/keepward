@@ -7,6 +7,7 @@ export interface AgeDef {
   name: string;
   costWood: number;
   costGold: number;
+  /** Age no longer gifts siege towers — only Watchtower is free at Dark. */
   unlocks: string[];
 }
 
@@ -23,21 +24,21 @@ export const AGES: Record<AgeId, AgeDef> = {
     name: 'Feudal Age',
     costWood: TUNING.ages.feudal.costWood,
     costGold: TUNING.ages.feudal.costGold,
-    unlocks: ['watchtower', 'mangonel', 'spearPost', 'longbow'],
+    unlocks: ['watchtower'],
   },
   castle: {
     id: 'castle',
     name: 'Castle Age',
     costWood: TUNING.ages.castle.costWood,
     costGold: TUNING.ages.castle.costGold,
-    unlocks: ['watchtower', 'mangonel', 'spearPost', 'longbow'],
+    unlocks: ['watchtower'],
   },
   imperial: {
     id: 'imperial',
     name: 'Imperial Age',
     costWood: TUNING.ages.imperial.costWood,
     costGold: TUNING.ages.imperial.costGold,
-    unlocks: ['watchtower', 'mangonel', 'spearPost', 'longbow'],
+    unlocks: ['watchtower'],
   },
 };
 

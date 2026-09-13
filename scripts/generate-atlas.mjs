@@ -572,9 +572,33 @@ function paintUnitElephant(w, h) {
   return c;
 }
 
+
+/** Rank trim overlay — readable at arm length; same footprint */
+function paintRankOverlay(base, rank) {
+  if (rank <= 0) return base;
+  const c = new Canvas(base.w, base.h);
+  base.blitTo(c, 0, 0);
+  const cx = base.w / 2;
+  if (rank >= 1) {
+    c.rect(cx + 12, 18, 3, 12, HEX.logBark, 1);
+    c.rect(cx + 15, 18, 8, 6, rank >= 3 ? HEX.knightGold : HEX.ochreWood, 1, 1);
+  }
+  if (rank >= 2) {
+    c.rect(cx - 14, 48, 28, 3, HEX.knightGold, 0.85, 1);
+  }
+  if (rank >= 3) {
+    for (let i = -12; i <= 8; i += 10) {
+      c.outlineRect(cx + i, 6, 7, 9, 1);
+      c.rect(cx + i, 6, 7, 9, HEX.knightGold, 1, 1);
+    }
+    c.stamp(cx - 6, 20, 4, HEX.sunRim, 0.5, 0.35);
+  }
+  return c;
+}
+
 // Layout
 const ATLAS_W = 512;
-const ATLAS_H = 512;
+const ATLAS_H = 640;
 const frames = {};
 const atlas = new Canvas(ATLAS_W, ATLAS_H);
 
@@ -613,6 +637,25 @@ place('tower_spearPost_aged', paintSpearPost(TW, TH, true), 340, 150, { x: 0.5, 
 place('tower_mangonel', paintMangonel(TW, TH), 0, 230, { x: 0.5, y: 0.78 });
 place('tower_mangonel_aged', paintMangonel(TW, TH, true), 68, 230, { x: 0.5, y: 0.78 });
 
+// Rank looks (keep1) — kill-upgrade / keep research visual tiers
+place('keep_r1', paintRankOverlay(paintKeep(80, 96), 1), 168, 40, { x: 0.5, y: 0.72 });
+place('keep_r2', paintRankOverlay(paintKeep(80, 96), 2), 252, 40, { x: 0.5, y: 0.72 });
+place('keep_r3', paintRankOverlay(paintKeep(80, 96, true), 3), 336, 40, { x: 0.5, y: 0.72 });
+
+place('tower_watchtower_r1', paintRankOverlay(paintWatchtower(TW, TH), 1), 136, 230, { x: 0.5, y: 0.78 });
+place('tower_watchtower_r2', paintRankOverlay(paintWatchtower(TW, TH), 2), 204, 230, { x: 0.5, y: 0.78 });
+place('tower_watchtower_r3', paintRankOverlay(paintWatchtower(TW, TH, true), 3), 272, 230, { x: 0.5, y: 0.78 });
+place('tower_longbow_r1', paintRankOverlay(paintLongbow(TW, TH), 1), 340, 230, { x: 0.5, y: 0.78 });
+place('tower_longbow_r2', paintRankOverlay(paintLongbow(TW, TH), 2), 408, 230, { x: 0.5, y: 0.78 });
+place('tower_longbow_r3', paintRankOverlay(paintLongbow(TW, TH, true), 3), 0, 400, { x: 0.5, y: 0.78 });
+place('tower_spearPost_r1', paintRankOverlay(paintSpearPost(TW, TH), 1), 68, 400, { x: 0.5, y: 0.82 });
+place('tower_spearPost_r2', paintRankOverlay(paintSpearPost(TW, TH), 2), 136, 400, { x: 0.5, y: 0.82 });
+place('tower_spearPost_r3', paintRankOverlay(paintSpearPost(TW, TH, true), 3), 204, 400, { x: 0.5, y: 0.82 });
+place('tower_mangonel_r1', paintRankOverlay(paintMangonel(TW, TH), 1), 272, 400, { x: 0.5, y: 0.78 });
+place('tower_mangonel_r2', paintRankOverlay(paintMangonel(TW, TH), 2), 340, 400, { x: 0.5, y: 0.78 });
+place('tower_mangonel_r3', paintRankOverlay(paintMangonel(TW, TH, true), 3), 408, 400, { x: 0.5, y: 0.78 });
+
+
 // Units 48x48
 const UW = 48;
 const UH = 48;
@@ -634,7 +677,7 @@ const json = {
   frames,
   meta: {
     app: 'keepward-generate-atlas',
-    version: 'art2',
+    version: 'keep1',
     image: 'keepward-atlas.png',
     format: 'RGBA8888',
     size: { w: ATLAS_W, h: ATLAS_H },
