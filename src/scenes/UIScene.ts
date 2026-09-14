@@ -49,6 +49,9 @@ export class UIScene extends Phaser.Scene {
   private undoLabel?: Phaser.GameObjects.Text;
   private undoArmed = false;
   private a2hsBanner?: Phaser.GameObjects.Container;
+  private teachKey = '';
+  private woodFlash?: Phaser.GameObjects.Rectangle;
+  private goldFlash?: Phaser.GameObjects.Rectangle;
 
   constructor() {
     super('UI');
@@ -64,6 +67,13 @@ export class UIScene extends Phaser.Scene {
     const topY = 22;
     this.add.rectangle(GAME_W / 2, topY + 6, GAME_W, 52, Palette.hudBg, 0.9).setDepth(100);
 
+    // Royale-style flash plates behind resource counters
+    this.woodFlash = this.add
+      .rectangle(36, topY + 8, 56, 22, 0xc4a35a, 0)
+      .setDepth(100.5);
+    this.goldFlash = this.add
+      .rectangle(100, topY + 8, 52, 22, 0xd4a84b, 0)
+      .setDepth(100.5);
     this.woodText = this.add
       .text(10, topY, 'W 100', { fontSize: '14px', color: '#C4A35A', fontFamily: 'system-ui', fontStyle: 'bold' })
       .setDepth(101);
@@ -260,10 +270,12 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('keepward-hud', this.refresh, this);
     this.game.events.on('keepward-toast', this.showToast, this);
     this.game.events.on('keepward-a2hs', this.showA2hs, this);
+    this.game.events.on('keepward-gain', this.onResourceGain, this);
     this.events.once('shutdown', () => {
       this.game.events.off('keepward-hud', this.refresh, this);
       this.game.events.off('keepward-toast', this.showToast, this);
       this.game.events.off('keepward-a2hs', this.showA2hs, this);
+      this.game.events.off('keepward-gain', this.onResourceGain, this);
       this.input.off('pointermove', this.onGlobalMove, this);
       this.input.off('pointerup', this.onGlobalUp, this);
       this.input.off('pointerupoutside', this.onGlobalUp, this);
@@ -367,6 +379,44 @@ export class UIScene extends Phaser.Scene {
       alpha: 0,
       delay: 1400,
       duration: 400,
+    });
+  };
+
+  /** Clash Royale–style HUD pop when wood/gold jumps (kills, clear, sell) */
+  private onResourceGain = (gain: { wood: number; gold: number }): void => {
+    if (gain.wood > 0) this.flashResource(this.woodText, this.woodFlash, '#E8D090', '#C4A35A');
+    if (gain.gold > 0) this.flashResource(this.goldText, this.goldFlash, '#FFE08A', '#D4A84B');
+  };
+
+  private flashResource(
+    text: Phaser.GameObjects.Text,
+    plate: Phaser.GameObjects.Rectangle | undefined,
+    bright: string,
+    rest: string,
+  ): void {
+    this.tweens.killTweensOf(text);
+    text.setScale(1);
+    text.setColor(bright);
+    this.tweens.add({
+      targets: text,
+      scaleX: 1.28,
+      scaleY: 1.28,
+      duration: 90,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        text.setScale(1);
+        text.setColor(rest);
+      },
+    });
+    if (!plate) return;
+    this.tweens.killTweensOf(plate);
+    plate.setAlpha(0.7);
+    this.tweens.add({
+      targets: plate,
+      alpha: 0,
+      duration: 320,
+      ease: 'Quad.easeOut',
     });
   };
 
@@ -619,44 +669,115 @@ export class UIScene extends Phaser.Scene {
       this.panel = undefined;
     }
 
-    const c = this.add.container(GAME_W / 2, GAME_H - 210).setDepth(150);
+    if (sk.tab === 'home') {
+      this.buildKeepStampHome(sk);
+      return;
+    }
+    this.buildKeepDetail(state, sk);
+  }
+
+  /** night2 #6 — 4 big stamp tiles (Age / Attack / Defense / Siege) */
+  private buildKeepStampHome(sk: NonNullable<GameHudState['selectedKeep']>): void {
+    const c = this.add.container(GAME_W / 2, GAME_H - 220).setDepth(150);
     const bg = this.add
-      .rectangle(0, 0, 380, 148, Palette.hudPanel, 0.98)
+      .rectangle(0, 0, 378, 188, Palette.hudPanel, 0.98)
       .setStrokeStyle(2, Palette.ochre);
     const title = this.add
-      .text(-180, -60, `Keep · ${sk.keepHp}/${sk.keepMaxHp} HP`, {
+      .text(-178, -78, `Keep · ${sk.keepHp}/${sk.keepMaxHp} HP`, {
         fontSize: '13px',
         color: '#C4A35A',
-        fontFamily: 'system-ui',
+        fontFamily: 'Georgia, serif',
         fontStyle: 'bold',
       })
       .setOrigin(0, 0.5);
     const kids: Phaser.GameObjects.GameObject[] = [bg, title];
 
-    const tabs: { id: KeepTab; label: string }[] = [
-      { id: 'age', label: 'Age' },
-      { id: 'attack', label: 'Atk' },
-      { id: 'defense', label: 'Def' },
-      { id: 'siege', label: 'Siege' },
+    const stamps: { id: KeepTab; label: string; sub: string; rot: number; fill: number }[] = [
+      { id: 'age', label: 'AGE', sub: sk.nextAgeName ? `→ ${sk.nextAgeName}` : 'Max', rot: -0.03, fill: 0x3a3228 },
+      { id: 'attack', label: 'ATTACK', sub: 'Bolts · Aura', rot: 0.025, fill: 0x3a2828 },
+      { id: 'defense', label: 'DEFENSE', sub: 'HP · Repair', rot: -0.02, fill: 0x283228 },
+      { id: 'siege', label: 'SIEGE', sub: 'Towers', rot: 0.035, fill: 0x2a3038 },
     ];
-    tabs.forEach((tab, i) => {
-      const x = -130 + i * 70;
-      const on = sk.tab === tab.id;
-      const btn = this.add
-        .rectangle(x, -34, 64, 24, on ? Palette.ochreDark : Palette.slate)
-        .setStrokeStyle(1, on ? Palette.gold : Palette.stone)
+    stamps.forEach((stamp, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const x = -88 + col * 176;
+      const y = -18 + row * 78;
+      // Outer wax rim
+      const rim = this.add
+        .rectangle(x, y, 164, 68, 0x1a1810, 1)
+        .setStrokeStyle(3, Palette.gold)
+        .setRotation(stamp.rot)
         .setInteractive({ useHandCursor: true });
+      // Inner parchment stamp
+      const face = this.add
+        .rectangle(x, y, 152, 56, stamp.fill, 1)
+        .setStrokeStyle(2, Palette.ochreDark)
+        .setRotation(stamp.rot);
       const lab = this.add
-        .text(x, -34, tab.label, {
-          fontSize: '11px',
-          color: on ? '#F0EBE0' : '#A0A090',
-          fontFamily: 'system-ui',
+        .text(x, y - 8, stamp.label, {
+          fontSize: '16px',
+          color: '#F0EBE0',
+          fontFamily: 'Georgia, serif',
           fontStyle: 'bold',
         })
-        .setOrigin(0.5);
-      btn.on('pointerup', () => this.gameScene.setKeepSheetTab(tab.id));
-      kids.push(btn, lab);
+        .setOrigin(0.5)
+        .setRotation(stamp.rot);
+      const sub = this.add
+        .text(x, y + 14, stamp.sub, {
+          fontSize: '10px',
+          color: '#C4A35A',
+          fontFamily: 'system-ui',
+        })
+        .setOrigin(0.5)
+        .setRotation(stamp.rot);
+      // Seal nub
+      const seal = this.add.circle(x + 62, y - 18, 7, Palette.blood, 0.9).setRotation(stamp.rot);
+      rim.on('pointerup', () => this.gameScene.setKeepSheetTab(stamp.id));
+      kids.push(rim, face, lab, sub, seal);
     });
+
+    const close = this.add
+      .text(170, -78, '✕', { fontSize: '16px', color: '#A0A090', fontFamily: 'system-ui' })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    close.setPadding(8, 8, 8, 8);
+    close.on('pointerup', () => this.gameScene.clearPlacedSelection());
+    kids.push(close);
+
+    c.add(kids);
+    this.panel = c;
+  }
+
+  private buildKeepDetail(state: GameHudState, sk: NonNullable<GameHudState['selectedKeep']>): void {
+    const c = this.add.container(GAME_W / 2, GAME_H - 210).setDepth(150);
+    const bg = this.add
+      .rectangle(0, 0, 380, 148, Palette.hudPanel, 0.98)
+      .setStrokeStyle(2, Palette.ochre);
+    const tabTitle =
+      sk.tab === 'age' ? 'Age' : sk.tab === 'attack' ? 'Attack' : sk.tab === 'defense' ? 'Defense' : 'Siege';
+    const title = this.add
+      .text(-150, -60, `${tabTitle} · ${sk.keepHp}/${sk.keepMaxHp}`, {
+        fontSize: '13px',
+        color: '#C4A35A',
+        fontFamily: 'Georgia, serif',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5);
+    const kids: Phaser.GameObjects.GameObject[] = [bg, title];
+
+    const back = this.add
+      .text(-178, -60, '←', {
+        fontSize: '18px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    back.setPadding(10, 8, 10, 8);
+    back.on('pointerup', () => this.gameScene.setKeepSheetTab('home'));
+    kids.push(back);
 
     if (sk.tab === 'age') {
       if (sk.aging) {
@@ -756,31 +877,38 @@ export class UIScene extends Phaser.Scene {
       if (this.teachOverlay) {
         const dead = this.teachOverlay;
         this.teachOverlay = undefined;
+        this.teachKey = '';
         this.time.delayedCall(0, () => {
           if (dead.active) dead.destroy(true);
         });
       }
       return;
     }
-    if (this.teachOverlay) return;
+    if (this.teachOverlay && this.teachKey === state.teach) return;
+    if (this.teachOverlay) {
+      this.teachOverlay.destroy(true);
+      this.teachOverlay = undefined;
+    }
+    this.teachKey = state.teach;
 
     const c = this.add.container(GAME_W / 2, GAME_H * 0.42).setDepth(250);
     const bg = this.add
-      .rectangle(0, 0, 300, 72, Palette.hudPanel, 0.92)
+      .rectangle(0, 0, 320, 78, Palette.hudPanel, 0.92)
       .setStrokeStyle(2, Palette.ochre)
       .setInteractive({ useHandCursor: true });
-    // ≤8 words teach-through-play
+    // PvZ one-sentence teaches (w1 short; w2–w3 one line)
     const msg = this.add
       .text(0, -8, state.teach, {
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#F0EBE0',
         fontFamily: 'system-ui',
         fontStyle: 'bold',
         align: 'center',
+        wordWrap: { width: 300 },
       })
       .setOrigin(0.5);
     const skip = this.add
-      .text(0, 22, 'Tap to skip', {
+      .text(0, 24, 'Tap to skip', {
         fontSize: '11px',
         color: '#A0A090',
         fontFamily: 'system-ui',

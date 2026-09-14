@@ -7,7 +7,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// night1 — juice/ceremony; survey1b baseline; dock-drag world coords; force SW bump
+// night2 — Royale HUD flash, ghost polish, Keep stamps, PvZ teach w2–3; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

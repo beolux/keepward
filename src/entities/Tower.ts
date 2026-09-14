@@ -462,7 +462,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   }
 }
 
-/** Ghost preview while placing — green valid / red invalid + live range */
+/** Ghost preview while placing — night2 polish: lerp follow + clear green/red */
 export class PlacementGhost {
   gfx: Phaser.GameObjects.Graphics;
   rangeGfx: Phaser.GameObjects.Graphics;
@@ -472,8 +472,13 @@ export class PlacementGhost {
   valid = false;
   x = 0;
   y = 0;
+  private targetX = 0;
+  private targetY = 0;
   private scene: Phaser.Scene;
   private agedLook = false;
+  /** Brighter than HUD rangeOk/Bad so valid/invalid reads at a glance */
+  private static readonly OK = 0x3dcc5a;
+  private static readonly BAD = 0xff3d4a;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -490,17 +495,40 @@ export class PlacementGhost {
   }
 
   show(x: number, y: number, valid: boolean): void {
-    this.active = true;
+    this.targetX = x;
+    this.targetY = y;
     this.valid = valid;
-    this.x = x;
-    this.y = y;
+    if (!this.active) {
+      this.x = x;
+      this.y = y;
+      this.active = true;
+    }
+    this.redraw();
+  }
+
+  /** Smooth follow — call from GameScene update while dragging */
+  tick(dtSec: number): void {
+    if (!this.active) return;
+    const k = 1 - Math.exp(-22 * Math.max(0.001, dtSec));
+    this.x += (this.targetX - this.x) * k;
+    this.y += (this.targetY - this.y) * k;
+    this.redraw();
+  }
+
+  private redraw(): void {
+    const x = this.x;
+    const y = this.y;
+    const valid = this.valid;
     const def = TOWERS[this.towerId];
-    const color = valid ? Palette.rangeOk : Palette.rangeBad;
+    const color = valid ? PlacementGhost.OK : PlacementGhost.BAD;
     this.rangeGfx.clear();
-    this.rangeGfx.lineStyle(2.5, color, 0.65);
+    this.rangeGfx.lineStyle(3.5, color, valid ? 0.85 : 0.8);
     this.rangeGfx.strokeCircle(x, y, def.range);
-    this.rangeGfx.fillStyle(color, 0.12);
+    this.rangeGfx.fillStyle(color, valid ? 0.2 : 0.16);
     this.rangeGfx.fillCircle(x, y, def.range);
+    // Inner ring for extra clarity
+    this.rangeGfx.lineStyle(1.5, color, 0.45);
+    this.rangeGfx.strokeCircle(x, y, Math.max(18, def.range * 0.42));
 
     const pair = TOWER_FRAME[this.towerId];
     const frame = this.agedLook ? pair.aged : pair.base;
@@ -515,37 +543,39 @@ export class PlacementGhost {
         this.sprite.setTexture(ATLAS_KEY, frame);
         this.sprite.setOrigin(o.x, o.y);
         this.sprite.setPosition(x, y);
-        this.sprite.setAlpha(valid ? 0.92 : 0.45);
-        this.sprite.setTint(valid ? 0xffffff : 0xaa6666);
+        this.sprite.setAlpha(valid ? 0.95 : 0.42);
+        this.sprite.setTint(valid ? 0xffffff : 0xff6666);
         this.sprite.setVisible(true);
       }
-      this.gfx.lineStyle(2, color, 0.9);
-      this.gfx.strokeCircle(x, y, 16);
+      this.gfx.lineStyle(3, color, 1);
+      this.gfx.strokeCircle(x, y, 17);
+      this.gfx.lineStyle(1.5, 0xffffff, valid ? 0.35 : 0.15);
+      this.gfx.strokeCircle(x, y, 17);
       return;
     }
 
     if (this.sprite) this.sprite.setVisible(false);
     this.gfx.clear();
-    this.gfx.fillStyle(def.color, valid ? 0.9 : 0.45);
+    this.gfx.fillStyle(def.color, valid ? 0.92 : 0.4);
     if (this.towerId === 'watchtower') {
       this.gfx.fillRect(x - 10, y - 8, 20, 28);
-      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.35);
       this.gfx.fillTriangle(x, y - 28, x - 14, y - 6, x + 14, y - 6);
     } else if (this.towerId === 'spearPost') {
       this.gfx.fillRoundedRect(x - 12, y, 24, 16, 2);
-      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.35);
       this.gfx.fillTriangle(x - 2, y + 2, x + 2, y - 26, x + 6, y + 2);
     } else if (this.towerId === 'longbow') {
       this.gfx.fillRect(x - 8, y - 6, 16, 26);
-      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.35);
       this.gfx.fillRoundedRect(x - 12, y - 18, 24, 14, 3);
     } else {
       this.gfx.fillRoundedRect(x - 14, y - 4, 28, 22, 3);
-      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.4);
+      this.gfx.fillStyle(def.accent, valid ? 0.95 : 0.35);
       this.gfx.fillCircle(x, y - 8, 10);
     }
-    this.gfx.lineStyle(2, color, 0.9);
-    this.gfx.strokeCircle(x, y, 16);
+    this.gfx.lineStyle(3, color, 1);
+    this.gfx.strokeCircle(x, y, 17);
   }
 
   hide(): void {

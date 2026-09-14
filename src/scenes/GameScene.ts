@@ -33,8 +33,11 @@ import { applyLockedView, pointerToWorld } from '../utils/view';
 
 const UNDO_MS = 2000;
 const TEACH_KEY = 'keepward-taught-v1';
+const TEACH_W2_KEY = 'keepward-taught-w2';
+const TEACH_W3_KEY = 'keepward-taught-w3';
 const A2HS_KEY = 'keepward-a2hs-v1';
 const KILL_COMBO_MS = 480;
+type TeachId = 'w1' | 'w2' | 'w3';
 
 export type GameHudState = {
   wood: number;
@@ -146,7 +149,7 @@ export class GameScene extends Phaser.Scene {
   private keepHpVisibleUntil = 0;
   private keepMaxHp: number = TUNING.keep.hp;
   private keepResearch: KeepResearchState = blankKeepResearch();
-  private keepSheetTab: KeepTab = 'age';
+  private keepSheetTab: KeepTab = 'home';
   private pointerDown = false;
   private dockDragging = false;
   /** Ignore tower taps right after place (same touch / iOS synthetic click) */
@@ -154,7 +157,10 @@ export class GameScene extends Phaser.Scene {
   /** Suppress GameScene pointerup while a dock-drag gesture owns the finger */
   private ignoreGamePointerUpUntil = 0;
   private teachMsg: string | null = null;
+  private teachId: TeachId | null = null;
   private taught = false;
+  private taughtW2 = false;
+  private taughtW3 = false;
 
   /** Incoming-side tell overlays (chevron + dust) */
   private incomingChevron?: Phaser.GameObjects.Container;
@@ -185,7 +191,7 @@ export class GameScene extends Phaser.Scene {
     this.keepHp = TUNING.keep.hp;
     this.keepMaxHp = TUNING.keep.hp;
     this.keepResearch = blankKeepResearch();
-    this.keepSheetTab = 'age';
+    this.keepSheetTab = 'home';
     this.waveIndex = 0;
     this.age = 'dark';
     this.selectedTower = 'watchtower';
@@ -221,10 +227,19 @@ export class GameScene extends Phaser.Scene {
 
     try {
       this.taught = localStorage.getItem(TEACH_KEY) === '1';
+      this.taughtW2 = localStorage.getItem(TEACH_W2_KEY) === '1';
+      this.taughtW3 = localStorage.getItem(TEACH_W3_KEY) === '1';
     } catch {
       this.taught = false;
+      this.taughtW2 = false;
+      this.taughtW3 = false;
     }
-    this.teachMsg = this.taught ? null : 'Drag tower into courtyard';
+    this.teachId = null;
+    this.teachMsg = null;
+    if (!this.taught) {
+      this.teachId = 'w1';
+      this.teachMsg = 'Drag tower into courtyard';
+    }
 
     applyLockedView(this);
     this.cameras.main.setBackgroundColor(Palette.grassDark);
@@ -308,27 +323,58 @@ export class GameScene extends Phaser.Scene {
   };
 
   skipTeach(): void {
+    this.persistTeach(this.teachId);
     this.teachMsg = null;
-    this.taught = true;
-    try {
-      localStorage.setItem(TEACH_KEY, '1');
-    } catch {
-      /* ignore */
-    }
+    this.teachId = null;
     this.emitHud();
   }
 
   private completeTeach(): void {
     if (!this.teachMsg) return;
+    // Wave-1 place completes the drag teach; w2/w3 are skip-only
+    if (this.teachId === 'w1') this.persistTeach('w1');
     this.teachMsg = null;
-    this.taught = true;
+    this.teachId = null;
+    // HUD emit deferred to caller (tryPlace) so teach overlay isn't
+    // destroyed synchronously inside the placing pointerup.
+  }
+
+  private persistTeach(id: TeachId | null): void {
+    if (!id) return;
     try {
-      localStorage.setItem(TEACH_KEY, '1');
+      if (id === 'w1') {
+        this.taught = true;
+        localStorage.setItem(TEACH_KEY, '1');
+      } else if (id === 'w2') {
+        this.taughtW2 = true;
+        localStorage.setItem(TEACH_W2_KEY, '1');
+      } else if (id === 'w3') {
+        this.taughtW3 = true;
+        localStorage.setItem(TEACH_W3_KEY, '1');
+      }
     } catch {
       /* ignore */
     }
-    // HUD emit deferred to caller (tryPlace) so teach overlay isn't
-    // destroyed synchronously inside the placing pointerup.
+  }
+
+  /** PvZ-style one-liners before waves 2–3 — once each, skippable */
+  private maybeOfferWaveTeach(): void {
+    if (this.teachMsg) return;
+    const upcoming = this.waveIndex + 1;
+    if (upcoming === 2 && !this.taughtW2) {
+      this.teachId = 'w2';
+      this.teachMsg = 'Tap damaged walls to repair them';
+    } else if (upcoming === 3 && !this.taughtW3) {
+      this.teachId = 'w3';
+      this.teachMsg = 'Tap the Keep to age and research';
+    }
+  }
+
+  private emitResourceGain(wood: number, gold: number): void {
+    const w = Math.floor(wood);
+    const g = Math.floor(gold);
+    if (w <= 0 && g <= 0) return;
+    this.game.events.emit('keepward-gain', { wood: Math.max(0, w), gold: Math.max(0, g) });
   }
 
   private drawKeepHp(): void {
@@ -593,7 +639,7 @@ export class GameScene extends Phaser.Scene {
     if (tower.towerId === 'keep') {
       const auraR = TUNING.keep.auraRangeTiles * TILE_PX;
       tower.showRange(true, auraR);
-      this.keepSheetTab = 'age';
+      this.keepSheetTab = 'home';
     } else {
       tower.showRange(true);
     }
@@ -797,6 +843,7 @@ export class GameScene extends Phaser.Scene {
     const refund = t.refund(false);
     this.wood += refund.wood;
     this.gold += refund.gold;
+    this.emitResourceGain(refund.wood, refund.gold);
     const idx = this.towers.indexOf(t);
     if (idx >= 0) this.towers.splice(idx, 1);
     if (this.lastPlaced === t) this.lastPlaced = null;
@@ -817,6 +864,7 @@ export class GameScene extends Phaser.Scene {
     const refund = t.refund(true);
     this.wood += refund.wood;
     this.gold += refund.gold;
+    this.emitResourceGain(refund.wood, refund.gold);
     const idx = this.towers.indexOf(t);
     if (idx >= 0) this.towers.splice(idx, 1);
     if (this.selectedPlaced === t) this.selectedPlaced = null;
@@ -1143,6 +1191,9 @@ export class GameScene extends Phaser.Scene {
       this.tweens.timeScale = 1;
     }
 
+    // Drag-ghost polish — smooth follow even while paused for place preview
+    if (this.ghost?.active) this.ghost.tick(delta / 1000);
+
     // Fade keep HP when timer expires
     if (this.keepHpBar.alpha > 0 && this.time.now > this.keepHpVisibleUntil && this.keepHp > 0) {
       this.keepHpBar.setAlpha(Math.max(0, this.keepHpBar.alpha - delta / 400));
@@ -1295,6 +1346,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.betweenWaves && !this.spawning && this.waveAlive <= 0) {
       const w = WAVES[this.waveIndex];
       this.gold += w.bonusGold;
+      this.emitResourceGain(0, w.bonusGold);
       this.waveIndex++;
       this.betweenWaves = true;
       this.waveDelay = this.buildDurationMsForUpcoming();
@@ -1359,6 +1411,7 @@ export class GameScene extends Phaser.Scene {
       const rg = e.rewardGold;
       this.wood += rw;
       this.gold += rg;
+      this.emitResourceGain(rw, rg);
       this.totalKills++;
       this.waveAlive = Math.max(0, this.waveAlive - 1);
       if (killer && killer.towerId !== 'keep') killer.onKill();
@@ -1475,6 +1528,7 @@ export class GameScene extends Phaser.Scene {
     this.fort.setIncomingEdge(edge);
     this.fort.setBuildRepairHints(true);
     this.showIncomingTell(edge);
+    this.maybeOfferWaveTeach();
     this.emitHud();
   }
 
@@ -1579,6 +1633,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startWave(wave: (typeof WAVES)[0]): void {
+    // Auto-dismiss teach when combat begins (still marked once if skipped earlier)
+    if (this.teachMsg && this.teachId && this.teachId !== 'w1') {
+      this.persistTeach(this.teachId);
+      this.teachMsg = null;
+      this.teachId = null;
+    }
     this.clearBuildPhaseVisuals();
     this.betweenWaves = false;
     this.spawning = true;

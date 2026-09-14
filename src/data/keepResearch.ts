@@ -7,7 +7,7 @@ import { TUNING } from './tuning';
 import type { AgeId } from './ages';
 import { ageIndex } from './ages';
 
-export type KeepTab = 'age' | 'attack' | 'defense' | 'siege';
+export type KeepTab = 'home' | 'age' | 'attack' | 'defense' | 'siege';
 
 export type AttackId = 'a1' | 'a2' | 'a3' | 'a4';
 export type DefenseId = 'd1' | 'd2' | 'd3' | 'd4';

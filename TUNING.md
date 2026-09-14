@@ -4,6 +4,8 @@
 
 **night1 juice:** combat numbers unchanged. Ceremony only — kill pop / bounty float / pitch-step SFX, CoC HP bars on hit, pip pulse, age fanfare, wave-clear beat + brief slow-mo, 2s undo chip, A2HS once after first clear/age, victory recap. Survey/dock-drag/place-freeze/bounties/research untouched.
 
+**night2 juice:** combat numbers unchanged. Royale wood/gold HUD flash on discrete gains; drag-ghost lerp + clearer green/red; Keep sheet 4 stamp tiles (Age/Attack/Defense/Siege); PvZ teach waves 2–3 (one sentence each, skippable, once). No pan/zoom, Bombard, 4th aura, multi-gate, or IAP.
+
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
 ## Nick / CoS override (early2)

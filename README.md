@@ -2,9 +2,9 @@
 
 Medieval fort-siege tower defense — hold the keep. Portrait mobile-first PWA.
 
-**Play:** https://beolux.github.io/keepward/?v=night1
+**Play:** https://beolux.github.io/keepward/?v=night2
 
-Hard-refresh / open with `?v=night1` if a prior build left a stuck service worker.
+Hard-refresh / open with `?v=night2` if a prior build left a stuck service worker.
 
 ## Stack
 
@@ -31,9 +31,10 @@ npm run build
 
 ## Feel
 
-- Drag-to-place ghost, kill pop + bounty float, wave-clear beat, age fanfare, 2s undo
+- Drag-to-place ghost (smooth follow · clear green/red), kill pop + bounty float, wave-clear beat, age fanfare, 2s undo
+- Royale wood/gold HUD flash on gain · Keep stamp sheet (Age/Attack/Defense/Siege)
 - Procedural WebAudio (mute toggle) · pause-on-hide · safe-area HUD · ≥44pt targets
-- Wave-1 teach (≤8 words, skippable)
+- Teach: wave 1 place + waves 2–3 one-liners (skippable, once)
 
 ## Tuning
 
