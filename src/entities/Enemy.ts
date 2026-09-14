@@ -35,12 +35,15 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
   private bodySprite: Phaser.GameObjects.Image | null = null;
   private hpBarBg: Phaser.GameObjects.Rectangle;
   private hpBar: Phaser.GameObjects.Rectangle;
+  private hpHideEvent?: Phaser.Time.TimerEvent;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
     this.bodyGfx = scene.add.graphics();
-    this.hpBarBg = scene.add.rectangle(0, -18, 22, 4, 0x000000, 0.5);
-    this.hpBar = scene.add.rectangle(-11, -18, 22, 4, Palette.blood).setOrigin(0, 0.5);
+    this.hpBarBg = scene.add.rectangle(0, -20, 28, 5, 0x000000, 0.7);
+    this.hpBar = scene.add.rectangle(-14, -20, 28, 5, 0x5aaa4a).setOrigin(0, 0.5);
+    this.hpBarBg.setVisible(false);
+    this.hpBar.setVisible(false);
     this.add([this.bodyGfx, this.hpBarBg, this.hpBar]);
     this.setVisible(false);
     this.setActive(false);
@@ -90,7 +93,11 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     this.setPosition(spawn.x, spawn.y);
     this.drawBody(def.color, def.accent, def.radius);
     if (this.elite && this.bodySprite) this.bodySprite.setTint(Palette.imperial);
+    this.hpHideEvent?.remove(false);
+    this.hpHideEvent = undefined;
     this.updateHpBar();
+    this.hpBar.setVisible(false);
+    this.hpBarBg.setVisible(false);
     this.setVisible(true);
     this.setActive(true);
     this.setAlpha(1);
@@ -247,9 +254,11 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
     const dmg = Math.max(1, raw - this.armor);
     this.hp -= dmg;
     this.updateHpBar();
+    this.revealHpBar();
     if (this.hp <= 0) {
       this.alive = false;
       this.dying = true;
+      this.hpHideEvent?.remove(false);
       this.hpBar.setVisible(false);
       this.hpBarBg.setVisible(false);
       return true;
@@ -259,12 +268,29 @@ export class EnemyUnit extends Phaser.GameObjects.Container {
 
   private updateHpBar(): void {
     const pct = Math.max(0, this.hp / this.maxHp);
-    this.hpBar.width = 22 * pct;
-    this.hpBar.setVisible(pct < 1 && this.alive);
-    this.hpBarBg.setVisible(pct < 1 && this.alive);
+    this.hpBar.width = 28 * pct;
+    const color = pct > 0.55 ? 0x5aaa4a : pct > 0.28 ? Palette.gold : Palette.blood;
+    this.hpBar.setFillStyle(color, 1);
+  }
+
+  /** CoC-style: bar only while recently hit */
+  private revealHpBar(): void {
+    if (!this.alive || this.dying) return;
+    this.hpBar.setVisible(true);
+    this.hpBarBg.setVisible(true);
+    this.hpBar.setAlpha(1);
+    this.hpBarBg.setAlpha(1);
+    this.hpHideEvent?.remove(false);
+    this.hpHideEvent = this.scene.time.delayedCall(1400, () => {
+      if (!this.alive || this.dying) return;
+      this.hpBar.setVisible(false);
+      this.hpBarBg.setVisible(false);
+    });
   }
 
   kill(_rewarded: boolean): void {
+    this.hpHideEvent?.remove(false);
+    this.hpHideEvent = undefined;
     this.alive = false;
     this.dying = false;
     this.setVisible(false);

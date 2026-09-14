@@ -10,6 +10,7 @@ type Stinger =
   | 'breach'
   | 'upgrade'
   | 'wave'
+  | 'waveClear'
   | 'age'
   | 'sell'
   | 'deny'
@@ -141,6 +142,21 @@ export class AudioSystem {
     }
   }
 
+  /** Consecutive-kill pitch climb (BTD / CoC pop) */
+  playKill(step = 0): void {
+    if (!this.unlocked || this.muted) return;
+    try {
+      if (!this.throttle('kill', 28)) return;
+      const n = Math.min(10, Math.max(0, step));
+      const mul = Math.pow(1.122462, n);
+      this.tone(760 * mul, 0.045, 'square', 0.09, 0, 380 * mul);
+      this.tone(570 * mul, 0.07, 'triangle', 0.07, 0.025);
+      if (n >= 3) this.tone(1140 * mul, 0.05, 'sine', 0.05, 0.04);
+    } catch {
+      /* never break the game loop */
+    }
+  }
+
   private playInner(id: Stinger): void {
     switch (id) {
       case 'place':
@@ -148,9 +164,13 @@ export class AudioSystem {
         this.tone(523, 0.1, 'triangle', 0.1, 0.05);
         break;
       case 'kill':
-        if (!this.throttle('kill', 40)) return;
-        this.tone(880, 0.05, 'square', 0.08, 0, 440);
-        this.tone(660, 0.07, 'triangle', 0.06, 0.03);
+        this.playKill(0);
+        break;
+      case 'waveClear':
+        this.tone(392, 0.08, 'triangle', 0.13);
+        this.tone(523, 0.1, 'triangle', 0.12, 0.07);
+        this.tone(659, 0.12, 'sine', 0.12, 0.14);
+        this.tone(784, 0.2, 'sine', 0.1, 0.22);
         break;
       case 'breach':
         this.noise(0.22, 0.18);
@@ -166,10 +186,12 @@ export class AudioSystem {
         this.tone(330, 0.12, 'triangle', 0.1, 0.08);
         break;
       case 'age':
-        this.tone(349, 0.1, 'triangle', 0.12);
-        this.tone(440, 0.12, 'triangle', 0.11, 0.08);
-        this.tone(523, 0.14, 'sine', 0.1, 0.16);
-        this.tone(698, 0.18, 'sine', 0.08, 0.24);
+        this.tone(262, 0.12, 'triangle', 0.13);
+        this.tone(330, 0.14, 'triangle', 0.12, 0.08);
+        this.tone(392, 0.16, 'sine', 0.12, 0.16);
+        this.tone(523, 0.2, 'sine', 0.13, 0.24);
+        this.tone(659, 0.24, 'sine', 0.11, 0.34);
+        this.tone(784, 0.32, 'sine', 0.09, 0.46);
         break;
       case 'sell':
         this.tone(400, 0.08, 'sine', 0.1, 0, 200);

@@ -2,6 +2,8 @@
 
 **Source of truth:** `src/data/tuning.ts`
 
+**night1 juice:** combat numbers unchanged. Ceremony only — kill pop / bounty float / pitch-step SFX, CoC HP bars on hit, pip pulse, age fanfare, wave-clear beat + brief slow-mo, 2s undo chip, A2HS once after first clear/age, victory recap. Survey/dock-drag/place-freeze/bounties/research untouched.
+
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
 ## Nick / CoS override (early2)

@@ -3,6 +3,7 @@ import { Palette } from '../data/palette';
 import { TOWERS, type TowerId, type UpgradeTrack } from '../data/towers';
 import { WAVES } from '../data/waves';
 import { AGES, AGE_ORDER, ageIndex, passiveMult, type AgeId } from '../data/ages';
+import { AGE_GEM } from '../data/artBible';
 import { TUNING, TILE_PX } from '../data/tuning';
 import {
   ATTACK_DEFS,
@@ -30,8 +31,10 @@ import type { WallDir } from '../data/fort';
 import { GAME_H, HUD_TOP, HUD_BOTTOM } from '../data/map';
 import { applyLockedView, pointerToWorld } from '../utils/view';
 
-const UNDO_MS = 6000;
+const UNDO_MS = 2000;
 const TEACH_KEY = 'keepward-taught-v1';
+const A2HS_KEY = 'keepward-a2hs-v1';
+const KILL_COMBO_MS = 480;
 
 export type GameHudState = {
   wood: number;
@@ -90,6 +93,10 @@ export type GameHudState = {
   buildCountdownSec: number;
   /** Next wave spawn edge — shown during build */
   nextEdge: 'N' | 'E' | 'S' | 'W' | null;
+  /** Remaining ms on last-place undo chip (0 = hidden) */
+  undoMsLeft: number;
+  /** End-of-run recap */
+  recap: { wavesCleared: number; kills: number; ageName: string } | null;
 };
 
 export class GameScene extends Phaser.Scene {
@@ -116,6 +123,12 @@ export class GameScene extends Phaser.Scene {
   private placing = false;
   private selectedPlaced: TowerUnit | null = null;
   private lastPlaced: TowerUnit | null = null;
+  private totalKills = 0;
+  private killCombo = 0;
+  private lastKillAt = 0;
+  private slowMoScale = 1;
+  private slowMoUntilReal = 0;
+  private a2hsOffered = false;
 
   private spawning = false;
   private spawnQueue: { enemy: EnemyId; at: number; elite?: boolean; edge: 'N' | 'E' | 'S' | 'W' }[] = [];
@@ -189,6 +202,13 @@ export class GameScene extends Phaser.Scene {
     this.placing = false;
     this.selectedPlaced = null;
     this.lastPlaced = null;
+    this.totalKills = 0;
+    this.killCombo = 0;
+    this.lastKillAt = 0;
+    this.slowMoScale = 1;
+    this.slowMoUntilReal = 0;
+    this.a2hsOffered = false;
+    this.tweens.timeScale = 1;
     this.aging = false;
     this.ageChannel = 0;
     this.ageTarget = null;
@@ -320,7 +340,7 @@ export class GameScene extends Phaser.Scene {
     const pct = Math.max(0, this.keepHp / this.keepMaxHp);
     g.fillStyle(0x000000, 0.5);
     g.fillRect(x - w / 2, y, w, 6);
-    g.fillStyle(pct > 0.35 ? Palette.ochre : Palette.blood, 1);
+    g.fillStyle(pct > 0.55 ? 0x5aaa4a : pct > 0.28 ? Palette.gold : Palette.blood, 1);
     g.fillRect(x - w / 2, y, w * pct, 6);
     this.keepHpLabel.setText(`Keep ${Math.ceil(this.keepHp)}`);
   }
@@ -770,7 +790,11 @@ export class GameScene extends Phaser.Scene {
     const t = this.selectedPlaced;
     const canUndo =
       this.lastPlaced === t && this.time.now - t.placedAt <= UNDO_MS && t.kills === 0;
-    const refund = t.refund(canUndo);
+    if (canUndo) {
+      this.undoLastPlaced();
+      return;
+    }
+    const refund = t.refund(false);
     this.wood += refund.wood;
     this.gold += refund.gold;
     const idx = this.towers.indexOf(t);
@@ -778,12 +802,30 @@ export class GameScene extends Phaser.Scene {
     if (this.lastPlaced === t) this.lastPlaced = null;
     this.selectedPlaced = null;
     t.destroyTower();
-    audio.play(canUndo ? 'sell' : 'sell');
-    this.game.events.emit(
-      'keepward-toast',
-      canUndo ? `Undo +${refund.wood}W ${refund.gold}G` : `Sold +${refund.wood}W ${refund.gold}G`,
-    );
+    audio.play('sell');
+    this.game.events.emit('keepward-toast', `Sold +${refund.wood}W ${refund.gold}G`);
     this.emitHud();
+  }
+
+  /** 2s undo chip / sheet — full refund, no tower tap required */
+  undoLastPlaced(): boolean {
+    if (this.paused || this.status !== 'playing') return false;
+    const t = this.lastPlaced;
+    if (!t || t.towerId === 'keep') return false;
+    if (t.kills > 0) return false;
+    if (this.time.now - t.placedAt > UNDO_MS) return false;
+    const refund = t.refund(true);
+    this.wood += refund.wood;
+    this.gold += refund.gold;
+    const idx = this.towers.indexOf(t);
+    if (idx >= 0) this.towers.splice(idx, 1);
+    if (this.selectedPlaced === t) this.selectedPlaced = null;
+    this.lastPlaced = null;
+    t.destroyTower();
+    audio.play('sell');
+    this.game.events.emit('keepward-toast', `Undo +${refund.wood}W ${refund.gold}G`);
+    this.emitHud();
+    return true;
   }
 
   tryWallUpgrade(id: 'hardenedTimbers' | 'stoneFacing'): void {
@@ -925,7 +967,9 @@ export class GameScene extends Phaser.Scene {
     for (const t of this.towers) t.setAgeVisual(next);
     this.ghost.setAgeVisual(next);
     audio.play('age');
+    this.fx.ageFanfare(this.fort.keepPos.x, this.fort.keepPos.y, AGES[next].name, AGE_GEM[next]);
     this.game.events.emit('keepward-toast', `Advanced to ${AGES[next].name}!`);
+    this.maybeOfferA2hs();
     this.emitHud();
   }
 
@@ -1030,6 +1074,26 @@ export class GameScene extends Phaser.Scene {
     }
 
     const nextEdge = this.betweenWaves && this.waveIndex < WAVES.length ? this.peekNextEdge() : null;
+    let undoMsLeft = 0;
+    if (
+      this.lastPlaced &&
+      this.lastPlaced.towerId !== 'keep' &&
+      this.lastPlaced.kills === 0
+    ) {
+      const left = UNDO_MS - (this.time.now - this.lastPlaced.placedAt);
+      if (left > 0) undoMsLeft = left;
+    }
+    const recap =
+      this.status === 'won' || this.status === 'lost'
+        ? {
+            wavesCleared:
+              this.status === 'won'
+                ? WAVES.length
+                : Math.max(1, this.betweenWaves ? this.waveIndex : this.waveIndex + 1),
+            kills: this.totalKills,
+            ageName: AGES[this.age].name,
+          }
+        : null;
     return {
       wood: Math.floor(this.wood),
       gold: Math.floor(this.gold),
@@ -1063,6 +1127,8 @@ export class GameScene extends Phaser.Scene {
           ? Math.max(0, Math.ceil(this.waveDelay / 1000))
           : 0,
       nextEdge,
+      undoMsLeft,
+      recap,
     };
   }
 
@@ -1072,6 +1138,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (performance.now() >= this.slowMoUntilReal) {
+      this.slowMoScale = 1;
+      this.tweens.timeScale = 1;
+    }
+
     // Fade keep HP when timer expires
     if (this.keepHpBar.alpha > 0 && this.time.now > this.keepHpVisibleUntil && this.keepHp > 0) {
       this.keepHpBar.setAlpha(Math.max(0, this.keepHpBar.alpha - delta / 400));
@@ -1079,8 +1150,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.paused || this.status !== 'playing') return;
-    const dt = delta / 1000;
-    const dtMs = delta;
+    const scale = this.slowMoScale;
+    const dt = (delta / 1000) * scale;
+    const dtMs = delta * scale;
 
     const pm = passiveMult(this.age);
     this.wood += TUNING.passive.woodPerSec * pm * dt;
@@ -1226,6 +1298,9 @@ export class GameScene extends Phaser.Scene {
       this.waveIndex++;
       this.betweenWaves = true;
       this.waveDelay = this.buildDurationMsForUpcoming();
+      this.pulseSlowMo(0.32, this.waveIndex >= WAVES.length ? 550 : 380);
+      audio.play('waveClear');
+      this.fx.waveClearBurst(this.waveIndex, w.bonusGold);
       this.emitHud();
       if (this.waveIndex < WAVES.length) {
         this.game.events.emit(
@@ -1233,6 +1308,10 @@ export class GameScene extends Phaser.Scene {
           `Wave ${this.waveIndex} cleared! +${w.bonusGold}g — rebuild`,
         );
         this.beginBuildPhaseVisuals();
+        this.time.delayedCall(1400, () => {
+          if (!this.sys.settings.active) return;
+          this.maybeOfferA2hs();
+        });
       } else {
         // Final wave cleared — brief pause then victory via betweenWaves timer
         this.clearBuildPhaseVisuals();
@@ -1280,13 +1359,21 @@ export class GameScene extends Phaser.Scene {
       const rg = e.rewardGold;
       this.wood += rw;
       this.gold += rg;
+      this.totalKills++;
       this.waveAlive = Math.max(0, this.waveAlive - 1);
       if (killer && killer.towerId !== 'keep') killer.onKill();
       const toX = killer ? killer.x : this.keepTower.x;
       const toY = killer ? killer.y : this.keepTower.y;
+      const now = this.time.now;
+      if (now - this.lastKillAt < KILL_COMBO_MS) this.killCombo++;
+      else this.killCombo = 0;
+      this.lastKillAt = now;
+      this.fx.killPop(gx, gy);
+      this.fx.bountyFloat(gx, gy, rg, rw);
       this.fx.goldToTower(gx, gy, toX, toY, rg, rw);
-      this.fx.flash(Palette.gold, 0.08, 50);
-      audio.play('kill');
+      if (killer) this.fx.towerNibble(killer);
+      this.fx.flash(Palette.gold, 0.1, 55);
+      audio.playKill(this.killCombo);
       this.fx.deathSquash(e, () => {
         e.kill(true);
       });
@@ -1321,6 +1408,40 @@ export class GameScene extends Phaser.Scene {
       duration: 280,
       onComplete: () => c.destroy(),
     });
+  }
+
+  /** Brief real-time slow-mo (wave-clear beat). Does not touch Phaser timeScale. */
+  private pulseSlowMo(scale: number, realMs: number): void {
+    this.slowMoScale = scale;
+    this.slowMoUntilReal = performance.now() + realMs;
+    this.tweens.timeScale = scale;
+  }
+
+  /** Once-ever A2HS hint after first wave clear or age-up. Not naggy. */
+  private maybeOfferA2hs(): void {
+    if (this.a2hsOffered) return;
+    try {
+      if (localStorage.getItem(A2HS_KEY) === '1') {
+        this.a2hsOffered = true;
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    const nav = navigator as Navigator & { standalone?: boolean };
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+    if (standalone) {
+      this.a2hsOffered = true;
+      try {
+        localStorage.setItem(A2HS_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    this.a2hsOffered = true;
+    this.game.events.emit('keepward-a2hs');
   }
 
   /** Thumb Start Wave — skip remaining build timer */

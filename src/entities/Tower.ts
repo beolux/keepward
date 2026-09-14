@@ -46,6 +46,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   /** Override ring radius when Keep selected (aura) */
   private ringOverride: number | null = null;
   private pipMode: 'none' | 'gold' | 'silver' = 'none';
+  private pipDot: Phaser.GameObjects.Arc | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, towerId: TowerId) {
     super(scene, x, y);
@@ -255,28 +256,44 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   private drawPip(): void {
     const g = this.pipGfx;
     g.clear();
+    if (this.pipDot) {
+      this.scene.tweens.killTweensOf(this.pipDot);
+      this.pipDot.setVisible(false);
+    }
     if (this.pipMode === 'none' || this.selected) return;
     const ox = this.towerId === 'keep' ? 18 : 14;
     const oy = this.towerId === 'keep' ? -30 : -26;
     if (this.pipMode === 'gold') {
-      // subtle ochre spark
-      g.fillStyle(Palette.gold, 0.95);
-      g.fillCircle(ox, oy, 4.5);
-      g.fillStyle(Palette.ochre, 0.7);
-      g.fillCircle(ox - 1, oy - 1, 2);
-      g.lineStyle(1, Palette.ochreDark, 0.8);
-      g.strokeCircle(ox, oy, 4.5);
-    } else {
-      // silver check — maxed
-      g.fillStyle(Palette.stoneLight, 0.9);
-      g.fillCircle(ox, oy, 4.5);
-      g.lineStyle(1.5, Palette.slate, 1);
-      g.beginPath();
-      g.moveTo(ox - 2.5, oy);
-      g.lineTo(ox - 0.5, oy + 2);
-      g.lineTo(ox + 3, oy - 2.5);
-      g.strokePath();
+      if (!this.pipDot) {
+        this.pipDot = this.scene.add.circle(ox, oy, 5, Palette.gold, 1);
+        this.pipDot.setStrokeStyle(1.5, Palette.ochreDark, 0.95);
+        this.add(this.pipDot);
+      } else {
+        this.pipDot.setPosition(ox, oy);
+      }
+      this.pipDot.setVisible(true);
+      this.pipDot.setScale(1);
+      this.pipDot.setAlpha(1);
+      this.scene.tweens.add({
+        targets: this.pipDot,
+        scale: 1.5,
+        alpha: 0.65,
+        duration: 480,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      return;
     }
+    // silver check — maxed
+    g.fillStyle(Palette.stoneLight, 0.9);
+    g.fillCircle(ox, oy, 4.5);
+    g.lineStyle(1.5, Palette.slate, 1);
+    g.beginPath();
+    g.moveTo(ox - 2.5, oy);
+    g.lineTo(ox - 0.5, oy + 2);
+    g.lineTo(ox + 3, oy - 2.5);
+    g.strokePath();
   }
 
   drawRange(show: boolean, ok = true): void {
@@ -388,6 +405,15 @@ export class TowerUnit extends Phaser.GameObjects.Container {
       this.investedGold += cost.gold;
     }
     this.recomputeStats();
+    this.setScale(1);
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 90,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+    });
     return true;
   }
 
@@ -431,6 +457,7 @@ export class TowerUnit extends Phaser.GameObjects.Container {
   }
 
   destroyTower(): void {
+    if (this.pipDot) this.scene.tweens.killTweensOf(this.pipDot);
     this.destroy(true);
   }
 }

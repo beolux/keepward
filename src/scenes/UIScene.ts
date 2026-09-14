@@ -45,6 +45,10 @@ export class UIScene extends Phaser.Scene {
   private startWaveLabel!: Phaser.GameObjects.Text;
   private buildCountdownText!: Phaser.GameObjects.Text;
   private incomingBanner!: Phaser.GameObjects.Text;
+  private undoBtn?: Phaser.GameObjects.Rectangle;
+  private undoLabel?: Phaser.GameObjects.Text;
+  private undoArmed = false;
+  private a2hsBanner?: Phaser.GameObjects.Container;
 
   constructor() {
     super('UI');
@@ -255,9 +259,11 @@ export class UIScene extends Phaser.Scene {
 
     this.game.events.on('keepward-hud', this.refresh, this);
     this.game.events.on('keepward-toast', this.showToast, this);
+    this.game.events.on('keepward-a2hs', this.showA2hs, this);
     this.events.once('shutdown', () => {
       this.game.events.off('keepward-hud', this.refresh, this);
       this.game.events.off('keepward-toast', this.showToast, this);
+      this.game.events.off('keepward-a2hs', this.showA2hs, this);
       this.input.off('pointermove', this.onGlobalMove, this);
       this.input.off('pointerup', this.onGlobalUp, this);
       this.input.off('pointerupoutside', this.onGlobalUp, this);
@@ -332,6 +338,7 @@ export class UIScene extends Phaser.Scene {
     // Same lift must NOT arm Start Wave (finger often ends over the button)
     this.startWaveArmed = false;
     this.startWaveBtn.setScale(1);
+    this.undoArmed = false;
     this.clearDockPress(id);
     this.gameScene.endDockPlace(ptr);
   };
@@ -340,6 +347,7 @@ export class UIScene extends Phaser.Scene {
   private onGlobalCancel = (): void => {
     this.startWaveArmed = false;
     this.startWaveBtn.setScale(1);
+    this.undoArmed = false;
     if (!this.dockDragId) {
       this.gameScene.cancelDockDrag();
       return;
@@ -450,12 +458,14 @@ export class UIScene extends Phaser.Scene {
     this.updateBottomSheet(state);
     this.updateTeach(state);
 
+    this.refreshUndoChip(state);
+
     if (state.paused && state.status === 'playing') {
       if (!this.overlay) this.showOverlay('PAUSED', 'Tap Resume to continue', true);
     } else if (state.status === 'won') {
-      if (!this.overlay) this.showOverlay('VICTORY', 'The keep stands strong!', false);
+      if (!this.overlay) this.showOverlay('VICTORY', 'The keep stands strong!', false, state.recap);
     } else if (state.status === 'lost') {
-      if (!this.overlay) this.showOverlay('DEFEAT', 'The keep has fallen…', false);
+      if (!this.overlay) this.showOverlay('DEFEAT', 'The keep has fallen…', false, state.recap);
     } else if (this.overlay) {
       this.clearOverlay();
     }
@@ -784,23 +794,163 @@ export class UIScene extends Phaser.Scene {
     this.teachOverlay = c;
   }
 
-  private showOverlay(title: string, sub: string, isPause: boolean): void {
+  private refreshUndoChip(state: GameHudState): void {
+    const show =
+      state.undoMsLeft > 0 &&
+      !state.selectedPlaced &&
+      !state.selectedKeep &&
+      !state.paused &&
+      state.status === 'playing';
+    if (!show) {
+      this.undoBtn?.disableInteractive();
+      this.undoBtn?.setVisible(false);
+      this.undoLabel?.setVisible(false);
+      this.undoArmed = false;
+      return;
+    }
+    if (!this.undoBtn) {
+      const x = 56;
+      const y = GAME_H - 252;
+      this.undoBtn = this.add
+        .rectangle(x, y, 96, 52, Palette.feudal)
+        .setStrokeStyle(2, Palette.gold)
+        .setDepth(132)
+        .setInteractive({ useHandCursor: true });
+      this.undoLabel = this.add
+        .text(x, y, 'UNDO', {
+          fontSize: '14px',
+          color: '#F0EBE0',
+          fontFamily: 'system-ui',
+          fontStyle: 'bold',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setDepth(133);
+      this.undoBtn.on('pointerdown', () => {
+        this.undoArmed = true;
+        this.undoBtn?.setScale(0.96);
+      });
+      this.undoBtn.on('pointerout', () => {
+        this.undoArmed = false;
+        this.undoBtn?.setScale(1);
+      });
+      this.undoBtn.on('pointerup', () => {
+        this.undoBtn?.setScale(1);
+        if (!this.undoArmed) return;
+        this.undoArmed = false;
+        audio.unlock();
+        this.gameScene.undoLastPlaced();
+      });
+    }
+    this.undoBtn.setVisible(true);
+    this.undoBtn.setInteractive({ useHandCursor: true });
+    this.undoLabel!.setVisible(true);
+    this.undoLabel!.setText(`UNDO\n${(state.undoMsLeft / 1000).toFixed(1)}s`);
+  }
+
+  private showA2hs = (): void => {
+    if (this.a2hsBanner) return;
+    try {
+      localStorage.setItem('keepward-a2hs-v1', '1');
+    } catch {
+      /* ignore */
+    }
+    const c = this.add.container(GAME_W / 2, 148).setDepth(180);
+    const bg = this.add
+      .rectangle(0, 0, 330, 64, Palette.hudPanel, 0.96)
+      .setStrokeStyle(2, Palette.ochre)
+      .setInteractive({ useHandCursor: true });
+    const msg = this.add
+      .text(0, -10, 'Add Keepward to Home Screen', {
+        fontSize: '14px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const sub = this.add
+      .text(0, 12, 'Share → Add  ·  tap to dismiss', {
+        fontSize: '11px',
+        color: '#A0A090',
+        fontFamily: 'system-ui',
+      })
+      .setOrigin(0.5);
+    const close = this.add
+      .text(148, -22, '✕', {
+        fontSize: '16px',
+        color: '#A0A090',
+        fontFamily: 'system-ui',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .setPadding(8, 8, 8, 8);
+    const dismiss = () => {
+      if (!this.a2hsBanner) return;
+      const dead = this.a2hsBanner;
+      this.a2hsBanner = undefined;
+      this.tweens.add({
+        targets: dead,
+        alpha: 0,
+        duration: 180,
+        onComplete: () => {
+          if (dead.active) dead.destroy(true);
+        },
+      });
+    };
+    bg.on('pointerup', dismiss);
+    close.on('pointerup', dismiss);
+    c.add([bg, msg, sub, close]);
+    this.a2hsBanner = c;
+  };
+
+  private showOverlay(
+    title: string,
+    sub: string,
+    isPause: boolean,
+    recap?: GameHudState['recap'],
+  ): void {
     this.clearOverlay();
     const c = this.add.container(GAME_W / 2, GAME_H / 2).setDepth(300);
     const bg = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.55);
-    const panel = this.add.rectangle(0, 0, 280, 200, Palette.hudPanel).setStrokeStyle(2, Palette.ochre);
+    const panelH = recap && !isPause ? 248 : 200;
+    const panel = this.add.rectangle(0, 0, 300, panelH, Palette.hudPanel).setStrokeStyle(2, Palette.ochre);
     const t = this.add
-      .text(0, -50, title, { fontSize: '28px', color: '#C4A35A', fontFamily: 'Georgia, serif' })
+      .text(0, recap && !isPause ? -78 : -50, title, {
+        fontSize: '28px',
+        color: '#C4A35A',
+        fontFamily: 'Georgia, serif',
+      })
       .setOrigin(0.5);
     const s = this.add
-      .text(0, -10, sub, { fontSize: '14px', color: '#F0EBE0', fontFamily: 'system-ui' })
+      .text(0, recap && !isPause ? -40 : -10, sub, {
+        fontSize: '14px',
+        color: '#F0EBE0',
+        fontFamily: 'system-ui',
+      })
       .setOrigin(0.5);
 
+    const kids: Phaser.GameObjects.GameObject[] = [bg, panel, t, s];
+    let btnY = 50;
+    if (recap && !isPause) {
+      const recapLine = `${recap.wavesCleared} waves · ${recap.kills} kills · ${recap.ageName}`;
+      const r = this.add
+        .text(0, -6, recapLine, {
+          fontSize: '13px',
+          color: '#D4A84B',
+          fontFamily: 'system-ui',
+          fontStyle: 'bold',
+          align: 'center',
+        })
+        .setOrigin(0.5);
+      kids.push(r);
+      btnY = 62;
+    }
+
     const resumeBtn = this.add
-      .rectangle(0, 50, 160, 48, Palette.ochre)
+      .rectangle(0, btnY, 160, 48, Palette.ochre)
       .setInteractive({ useHandCursor: true });
     const resumeLabel = this.add
-      .text(0, 50, isPause ? 'RESUME' : 'AGAIN', {
+      .text(0, btnY, isPause ? 'RESUME' : 'AGAIN', {
         fontSize: '18px',
         color: '#1A2A22',
         fontFamily: 'Georgia, serif',
@@ -814,12 +964,13 @@ export class UIScene extends Phaser.Scene {
     });
 
     const menuBtn = this.add
-      .text(0, 95, 'Menu', { fontSize: '14px', color: '#A0A090', fontFamily: 'system-ui' })
+      .text(0, btnY + 48, 'Menu', { fontSize: '14px', color: '#A0A090', fontFamily: 'system-ui' })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     menuBtn.on('pointerup', () => this.gameScene.goMenu());
 
-    c.add([bg, panel, t, s, resumeBtn, resumeLabel, menuBtn]);
+    kids.push(resumeBtn, resumeLabel, menuBtn);
+    c.add(kids);
     this.overlay = c;
   }
 

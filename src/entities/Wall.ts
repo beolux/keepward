@@ -19,6 +19,7 @@ export class WallSegment {
   /** Soft glow under wall when incoming on this side */
   incomingGlow: Phaser.GameObjects.Graphics;
   private pipGfx: Phaser.GameObjects.Graphics;
+  private hpBarGfx: Phaser.GameObjects.Graphics;
   private pipMode: 'none' | 'gold' | 'silver' = 'none';
   private scene: Phaser.Scene;
   private hpHideEvent?: Phaser.Time.TimerEvent;
@@ -35,6 +36,7 @@ export class WallSegment {
 
     this.incomingGlow = scene.add.graphics().setDepth(14).setAlpha(0);
     this.pipGfx = scene.add.graphics().setDepth(18);
+    this.hpBarGfx = scene.add.graphics().setDepth(19).setAlpha(0);
     this.gfx = scene.add.graphics().setDepth(15);
     this.hpText = scene.add
       .text(def.breachPoint.x, def.breachPoint.y, '', {
@@ -98,6 +100,7 @@ export class WallSegment {
       this.hpText.setText('BUILD…');
       this.hpText.setColor('#D4A84B');
       this.hpText.setAlpha(1);
+      this.hpBarGfx.clear();
       this.drawIncomingGlow();
       return;
     }
@@ -113,6 +116,7 @@ export class WallSegment {
       this.hpText.setText('BREACH');
       this.hpText.setColor('#E08080');
       this.hpText.setAlpha(1);
+      this.hpBarGfx.clear();
       this.drawIncomingGlow();
       return;
     }
@@ -139,6 +143,7 @@ export class WallSegment {
     }
     this.hpText.setText(`${Math.ceil(this.hp)}`);
     this.hpText.setColor(pct < 0.35 ? '#E08080' : '#F0EBE0');
+    this.drawHpBar();
     this.drawIncomingGlow();
   }
 
@@ -225,6 +230,25 @@ export class WallSegment {
     g.strokeRect(r.x, r.y, r.w, r.h);
   }
 
+  /** CoC-style HP bar — shown via showHpBrief on hit */
+  private drawHpBar(): void {
+    const g = this.hpBarGfx;
+    g.clear();
+    if (this.breached || this.rebuilding) return;
+    const r = this.def.rect;
+    const pct = Math.max(0, this.hp / this.maxHp);
+    const w = Math.max(32, Math.min(r.w, 52));
+    const x = r.x + r.w / 2 - w / 2;
+    const y = r.y - 8;
+    const color = pct > 0.55 ? 0x5aaa4a : pct > 0.28 ? Palette.gold : Palette.blood;
+    g.fillStyle(0x000000, 0.7);
+    g.fillRect(x, y, w, 5);
+    g.fillStyle(color, 1);
+    g.fillRect(x, y, w * pct, 5);
+    g.lineStyle(1, Palette.chalk, 0.35);
+    g.strokeRect(x, y, w, 5);
+  }
+
   private drawIncomingGlow(): void {
     const g = this.incomingGlow;
     g.clear();
@@ -266,10 +290,12 @@ export class WallSegment {
     this.redraw(this.stone);
     if (on && (this.breached || (!this.breached && this.hp < this.maxHp))) {
       this.hpText.setAlpha(1);
+      if (!this.breached) this.hpBarGfx.setAlpha(1);
       this.hpHideEvent?.remove(false);
       this.hpHideEvent = undefined;
     } else if (!this.breached && !on && !this.rebuilding) {
       this.hpText.setAlpha(0);
+      this.hpBarGfx.setAlpha(0);
     }
   }
 
@@ -277,15 +303,19 @@ export class WallSegment {
   showHpBrief(ms = 900): void {
     if (this.breached || this.rebuilding) {
       this.hpText.setAlpha(1);
+      this.hpBarGfx.setAlpha(0);
       return;
     }
+    this.drawHpBar();
     this.hpText.setAlpha(1);
+    this.hpBarGfx.setAlpha(1);
     this.hpHideEvent?.remove(false);
     // Stay visible while build hint is on
     if (this.buildHint && this.hp < this.maxHp) return;
     this.hpHideEvent = this.scene.time.delayedCall(ms, () => {
       if (!this.breached && !this.rebuilding && !(this.buildHint && this.hp < this.maxHp)) {
         this.hpText.setAlpha(0);
+        this.hpBarGfx.setAlpha(0);
       }
     });
   }
@@ -386,6 +416,7 @@ export class WallSegment {
     this.scene.tweens.killTweensOf(this.incomingGlow);
     this.incomingGlow.destroy();
     this.pipGfx.destroy();
+    this.hpBarGfx.destroy();
     this.gfx.destroy();
     this.hpText.destroy();
     this.hitZone.destroy();

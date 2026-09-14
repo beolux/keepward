@@ -7,7 +7,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// survey1b — fat snap + stroke walls + corners free; keep dock-drag world coords; force SW bump
+// night1 — juice/ceremony; survey1b baseline; dock-drag world coords; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {
