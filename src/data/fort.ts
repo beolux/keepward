@@ -1,7 +1,9 @@
 import { GAME_W, GAME_H, HUD_TOP, HUD_BOTTOM } from './map';
 
-export type WallDir = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
-export type LayoutId = 'square' | 'wide' | 'tall';
+export type WallDir = string;
+export type LayoutId = 'square' | 'wide' | 'tall' | 'survey';
+export type WallKind = 'straight' | 'corner' | 'gate' | 'gap';
+export type SpawnEdge = 'N' | 'E' | 'S' | 'W';
 
 export interface Rect {
   x: number;
@@ -11,7 +13,7 @@ export interface Rect {
 }
 
 export interface FortLayout {
-  id: LayoutId;
+  id: string;
   name: string;
   /** Inner courtyard AABB (placement-legal interior) */
   courtyard: Rect;
@@ -50,7 +52,7 @@ function fitCourtyard(
   };
 }
 
-export const FORT_LAYOUTS: Record<LayoutId, FortLayout> = {
+export const FORT_LAYOUTS: Record<Exclude<LayoutId, "survey">, FortLayout> = {
   square: {
     id: 'square',
     name: 'Square Keep',
@@ -71,7 +73,7 @@ export const FORT_LAYOUTS: Record<LayoutId, FortLayout> = {
   },
 };
 
-export const LAYOUT_ORDER: LayoutId[] = ['square', 'wide', 'tall'];
+export const LAYOUT_ORDER: Array<Exclude<LayoutId, 'survey'>> = ['square', 'wide', 'tall'];
 
 export const WALL_DIRS: WallDir[] = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
@@ -89,6 +91,7 @@ export const WALL_ADJACENT: Record<WallDir, WallDir[]> = {
 
 export interface WallSegmentDef {
   dir: WallDir;
+  kind: WallKind;
   /** Segment AABB */
   rect: Rect;
   /** Point just outside the wall where attackers stand */
@@ -96,7 +99,11 @@ export interface WallSegmentDef {
   /** Point on the wall center (breach / path target) */
   breachPoint: { x: number; y: number };
   /** Hemisphere for spawn targeting: which edge spawns prefer this wall */
-  hemisphere: 'N' | 'E' | 'S' | 'W';
+  hemisphere: SpawnEdge;
+  /** Edges this piece faces (corners may face two) */
+  faces: SpawnEdge[];
+  /** Piece ids sharing a vertex — elephant splash */
+  adjacent: WallDir[];
 }
 
 function buildSegments(layout: FortLayout): WallSegmentDef[] {
@@ -109,7 +116,7 @@ function buildSegments(layout: FortLayout): WallSegmentDef[] {
   const midY = c.y + c.h / 2;
   const corner = Math.min(c.w, c.h) * 0.22;
 
-  const segs: WallSegmentDef[] = [
+  const segs: Array<Omit<WallSegmentDef, "kind" | "faces" | "adjacent">> = [
     {
       dir: 'N',
       rect: { x: ox + corner, y: oy - t, w: c.w - corner * 2, h: t },
@@ -167,7 +174,30 @@ function buildSegments(layout: FortLayout): WallSegmentDef[] {
       hemisphere: 'N',
     },
   ];
-  return segs;
+  const adj: Record<string, WallDir[]> = {
+    N: ['NW', 'NE'],
+    NE: ['N', 'E'],
+    E: ['NE', 'SE'],
+    SE: ['E', 'S'],
+    S: ['SE', 'SW'],
+    SW: ['S', 'W'],
+    W: ['SW', 'NW'],
+    NW: ['W', 'N'],
+  };
+  return segs.map((s) => {
+    const corner = s.dir.length > 1;
+    const faces: SpawnEdge[] = corner
+      ? (s.dir.includes('N') ? ['N'] : s.dir.includes('S') ? ['S'] : []).concat(
+          s.dir.includes('E') ? ['E'] : s.dir.includes('W') ? ['W'] : [],
+        ) as SpawnEdge[]
+      : [s.hemisphere];
+    return {
+      ...s,
+      kind: (corner ? 'corner' : 'straight') as WallKind,
+      faces: faces.length ? faces : [s.hemisphere],
+      adjacent: adj[s.dir] ?? [],
+    };
+  });
 }
 
 export function keepCenter(layout: FortLayout): { x: number; y: number } {
@@ -177,7 +207,7 @@ export function keepCenter(layout: FortLayout): { x: number; y: number } {
   };
 }
 
-export function generateFort(layoutId: LayoutId): {
+export function generateFort(layoutId: Exclude<LayoutId, "survey">): {
   layout: FortLayout;
   segments: WallSegmentDef[];
   keep: { x: number; y: number };

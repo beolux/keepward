@@ -307,13 +307,13 @@ export class UIScene extends Phaser.Scene {
       this.dockDragId = id;
       this.gameScene.selectBuildTower(id);
       // Start ghost immediately — drag from dock
-      this.gameScene.beginDockPlace(id, ptr.x, ptr.y);
+      this.gameScene.beginDockPlace(id, ptr);
     });
   }
 
   private onGlobalMove = (ptr: Phaser.Input.Pointer): void => {
     if (!this.dockDragId) return;
-    this.gameScene.updateDockPlace(ptr.x, ptr.y);
+    this.gameScene.updateDockPlace(ptr);
   };
 
   private clearDockPress(id: string): void {
@@ -333,7 +333,7 @@ export class UIScene extends Phaser.Scene {
     this.startWaveArmed = false;
     this.startWaveBtn.setScale(1);
     this.clearDockPress(id);
-    this.gameScene.endDockPlace(ptr.x, ptr.y);
+    this.gameScene.endDockPlace(ptr);
   };
 
   /** touchcancel / finger left canvas — must release drag or input stays dead */

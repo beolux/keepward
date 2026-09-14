@@ -58,6 +58,16 @@ export class WallSegment {
       .setInteractive({ useHandCursor: true })
       .setDepth(17);
 
+    if (def.kind === 'gap') {
+      this.breached = true;
+      this.hp = 0;
+      this.gfx.setVisible(false);
+      this.incomingGlow.setVisible(false);
+      this.hpText.setVisible(false);
+      this.hitZone.disableInteractive();
+      this.hitZone.setActive(false).setVisible(false);
+      return;
+    }
     this.redraw();
   }
 
@@ -113,6 +123,8 @@ export class WallSegment {
 
     if (stone) {
       this.paintStoneWall(g, r, pct);
+    } else if (this.def.kind === 'gate') {
+      this.paintGate(g, r, pct);
     } else {
       this.paintPalisade(g, r, pct);
     }
@@ -156,6 +168,31 @@ export class WallSegment {
     }
     g.lineStyle(1, Palette.ochreDark, 0.85);
     g.strokeRect(r.x, r.y, r.w, r.h);
+  }
+
+  /** Dark palisade with a barred door — still a wall until breached */
+  private paintGate(
+    g: Phaser.GameObjects.Graphics,
+    r: { x: number; y: number; w: number; h: number },
+    pct: number,
+  ): void {
+    this.paintPalisade(g, r, pct);
+    const horizontal = r.w >= r.h;
+    const door = horizontal
+      ? { x: r.x + r.w * 0.32, y: r.y - 1, w: r.w * 0.36, h: r.h + 2 }
+      : { x: r.x - 1, y: r.y + r.h * 0.32, w: r.w + 2, h: r.h * 0.36 };
+    g.fillStyle(Palette.dirtDark, 0.92);
+    g.fillRect(door.x, door.y, door.w, door.h);
+    g.fillStyle(Palette.ochreDark, 0.85);
+    if (horizontal) {
+      g.fillRect(door.x + 2, door.y + r.h * 0.25, door.w - 4, 2);
+      g.fillRect(door.x + door.w / 2 - 1, door.y, 2, door.h);
+    } else {
+      g.fillRect(door.x + r.w * 0.25, door.y + 2, 2, door.h - 4);
+      g.fillRect(door.x, door.y + door.h / 2 - 1, door.w, 2);
+    }
+    g.lineStyle(1, Palette.gold, 0.55);
+    g.strokeRect(door.x, door.y, door.w, door.h);
   }
 
   /** Castle/Imperial: slate blocks + mortar */
@@ -301,6 +338,7 @@ export class WallSegment {
 
   /** Gold pip = wall upgrade affordable; silver = both wall upgs done */
   setUpgradePip(mode: 'none' | 'gold' | 'silver'): void {
+    if (this.def.kind === 'gap') return;
     if (this.pipMode === mode) return;
     this.pipMode = mode;
     const g = this.pipGfx;

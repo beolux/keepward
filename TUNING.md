@@ -20,15 +20,16 @@ Research costs made saving hard. **2× all kill wood and gold** so research + re
 | Elephant | 80 | 80 |
 
 ## Fort
-- 8 wall segments: N/NE/E/SE/S/SW/W/NW
-- Layouts: square / wide / tall (`src/data/fort.ts`) — courtyard ~2× interior placeable area
+- **survey1:** player-surveyed palisade (or Quick fort 8-seg rect + south gate)
+- Min 6 / max 12 wall pieces incl auto-corners; exactly 1 gate
+- Survey is FREE. Dark palisade HP **160** on confirm. Repair after w1 still paid.
 - Free place anywhere inside courtyard (not walls/exterior/keep/towers)
 - Placement: towerRadius 13 · keepClearance 28
 
-## Wall HP by age (per segment) — walls3 (~+20% over walls2)
+## Wall HP by age (per segment) — survey1 Dark 160; later ages walls3
 | Age | HP |
 |-----|-----|
-| Dark | 190 |
+| Dark | 160 |
 | Feudal | 340 |
 | Castle | 620 |
 | Imperial | 960 |

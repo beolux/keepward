@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Palette } from '../data/palette';
 import { GAME_W, GAME_H } from '../data/map';
-import { LAYOUT_ORDER, FORT_LAYOUTS, type LayoutId } from '../data/fort';
+import { makeQuickFort } from '../data/survey';
 import { audio } from '../systems/AudioSystem';
 import { FRAME_ORIGIN } from '../data/artBible';
 import { hasFrame } from '../art/atlas';
@@ -58,7 +58,7 @@ export class MenuScene extends Phaser.Scene {
       .text(
         width / 2,
         height * 0.42,
-        'Fort siege. Free-place towers in the courtyard.\nWalls fall. Breach. Hold the Keep.\n50 waves · Age up · Upgrade by kills.',
+        'Survey your palisade. Confirm. Hold the Keep.\nWalls fall. Breach. 50 waves · Age up · Upgrade by kills.',
         {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '14px',
@@ -69,9 +69,13 @@ export class MenuScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
 
-    LAYOUT_ORDER.forEach((id, i) => {
-      const y = height * 0.58 + i * 56;
-      this.makeLayoutBtn(id, width / 2, y);
+    this.makeStartBtn(width / 2, height * 0.58, 'SURVEY FORT', true, () => {
+      audio.unlock();
+      this.scene.start('Survey');
+    });
+    this.makeStartBtn(width / 2, height * 0.58 + 62, 'Quick fort', false, () => {
+      audio.unlock();
+      this.scene.start('Game', { survey: makeQuickFort() });
     });
 
     this.add
@@ -86,32 +90,26 @@ export class MenuScene extends Phaser.Scene {
     this.input.once('pointerdown', () => audio.unlock());
   }
 
-  private makeLayoutBtn(id: LayoutId, x: number, y: number): void {
-    const layout = FORT_LAYOUTS[id];
+  private makeStartBtn(
+    x: number,
+    y: number,
+    text: string,
+    primary: boolean,
+    fn: () => void,
+  ): void {
     const btn = this.add
-      .rectangle(x, y, 250, 48, Palette.ochre)
-      .setStrokeStyle(2, Palette.ochreDark)
+      .rectangle(x, y, 250, 52, primary ? Palette.ochre : Palette.hudPanel)
+      .setStrokeStyle(2, primary ? Palette.ochreDark : Palette.stone)
       .setInteractive({ useHandCursor: true });
     const label = this.add
-      .text(x, y, id === 'square' ? `DEFEND · ${layout.name}` : layout.name, {
+      .text(x, y, text, {
         fontFamily: 'Georgia, serif',
-        fontSize: id === 'square' ? '18px' : '16px',
-        color: '#1A2A22',
+        fontSize: primary ? '18px' : '16px',
+        color: primary ? '#1A2A22' : '#F0EBE0',
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
-
-    const start = () => {
-      audio.unlock();
-      this.scene.start('Game', { layout: id });
-    };
-    btn.on('pointerup', start);
-    label.setInteractive({ useHandCursor: true }).on('pointerup', start);
-
-    if (id !== 'square') {
-      btn.setFillStyle(Palette.hudPanel);
-      label.setColor('#F0EBE0');
-      btn.setStrokeStyle(2, Palette.stone);
-    }
+    btn.on('pointerup', fn);
+    label.setInteractive({ useHandCursor: true }).on('pointerup', fn);
   }
 }

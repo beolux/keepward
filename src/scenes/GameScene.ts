@@ -16,7 +16,8 @@ import {
   type KeepResearchState,
   type KeepTab,
 } from '../data/keepResearch';
-import { LAYOUT_ORDER, SPAWN_EDGES, edgeSpawnPoints, type LayoutId } from '../data/fort';
+import { SPAWN_EDGES, edgeSpawnPoints, type LayoutId } from '../data/fort';
+import { makeQuickFort, type SurveyedFort } from '../data/survey';
 import { TowerUnit, PlacementGhost } from '../entities/Tower';
 import { EnemyUnit } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
@@ -27,7 +28,7 @@ import { audio } from '../systems/AudioSystem';
 import { isCavalry, type EnemyId } from '../data/enemies';
 import type { WallDir } from '../data/fort';
 import { GAME_H, HUD_TOP, HUD_BOTTOM } from '../data/map';
-import { applyLockedView } from '../utils/view';
+import { applyLockedView, pointerToWorld } from '../utils/view';
 
 const UNDO_MS = 6000;
 const TEACH_KEY = 'keepward-taught-v1';
@@ -100,7 +101,8 @@ export class GameScene extends Phaser.Scene {
   selectedTower: TowerId | null = 'watchtower';
   paused = false;
   status: 'playing' | 'won' | 'lost' = 'playing';
-  layoutId: LayoutId = 'square';
+  layoutId: LayoutId = 'survey';
+  survey!: SurveyedFort;
 
   private fort!: FortSystem;
   private fx!: FxSystem;
@@ -151,9 +153,17 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  init(data?: { layout?: LayoutId }): void {
-    if (data?.layout) this.layoutId = data.layout;
-    else this.layoutId = LAYOUT_ORDER[Math.floor(Math.random() * LAYOUT_ORDER.length)];
+  init(data?: { layout?: LayoutId; survey?: SurveyedFort }): void {
+    if (data?.survey) {
+      this.survey = data.survey;
+      this.layoutId = 'survey';
+    } else if (data?.layout && data.layout !== 'survey') {
+      this.layoutId = data.layout;
+      this.survey = makeQuickFort();
+    } else {
+      this.survey = makeQuickFort();
+      this.layoutId = 'survey';
+    }
   }
 
   create(): void {
@@ -198,7 +208,7 @@ export class GameScene extends Phaser.Scene {
 
     applyLockedView(this);
     this.cameras.main.setBackgroundColor(Palette.grassDark);
-    this.fort = new FortSystem(this, this.layoutId);
+    this.fort = new FortSystem(this, this.survey);
     this.fx = new FxSystem(this);
 
     this.keepTower = new TowerUnit(this, this.fort.keepPos.x, this.fort.keepPos.y, 'keep');
@@ -245,6 +255,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('gameout', this.onPointerCancel, this);
 
     for (const seg of this.fort.segments.values()) {
+      if (seg.def.kind === 'gap') continue;
       seg.hitZone.on('pointerup', () => this.onWallTap(seg.dir));
     }
 
@@ -324,8 +335,13 @@ export class GameScene extends Phaser.Scene {
     return y > HUD_TOP + 8 && y < GAME_H - HUD_BOTTOM;
   }
 
+  /** Pointer → logical playfield (undo DPR buffer + camera zoom). */
+  private worldXY(pointer: Phaser.Input.Pointer): { x: number; y: number } {
+    return pointerToWorld(this, pointer);
+  }
+
   /** Start drag-place from dock button (Clash Royale style) */
-  beginDockPlace(id: TowerId, x: number, y: number): void {
+  beginDockPlace(id: TowerId, pointer: Phaser.Input.Pointer): void {
     audio.unlock();
     if (this.paused || this.status !== 'playing') return;
     const def = TOWERS[id];
@@ -339,17 +355,20 @@ export class GameScene extends Phaser.Scene {
     // Block GameScene global pointerup for the whole dock gesture (+ release race)
     this.ignoreGamePointerUpUntil = this.time.now + 60_000;
     this.ghost.setTower(id);
+    const { x, y } = this.worldXY(pointer);
     this.updateGhost(x, y);
     this.emitHud();
   }
 
-  updateDockPlace(x: number, y: number): void {
+  updateDockPlace(pointer: Phaser.Input.Pointer): void {
     if (!this.placing || !this.dockDragging) return;
+    const { x, y } = this.worldXY(pointer);
     this.updateGhost(x, y);
   }
 
-  endDockPlace(x: number, y: number): void {
+  endDockPlace(pointer: Phaser.Input.Pointer): void {
     if (!this.placing || !this.dockDragging) return;
+    const { x, y } = this.worldXY(pointer);
     // Force-release BEFORE any place side-effects (iOS input wedge)
     this.dockDragging = false;
     this.pointerDown = false;
@@ -422,12 +441,13 @@ export class GameScene extends Phaser.Scene {
     audio.unlock();
     if (this.paused || this.status !== 'playing') return;
     if (this.dockDragging) return;
-    if (!this.inPlayfield(pointer.x, pointer.y)) return;
+    const { x, y } = this.worldXY(pointer);
+    if (!this.inPlayfield(x, y)) return;
 
     // Never start place from bare playfield tap — dock-drag owns placing.
     // (selectedTower defaults to watchtower and was stealing wall repair taps.)
     this.pointerDown = true;
-    if (this.pointerOverWall(pointer.x, pointer.y)) {
+    if (this.pointerOverWall(x, y)) {
       // Let wall hitZone handle repair/rebuild on pointerup
       return;
     }
@@ -436,7 +456,8 @@ export class GameScene extends Phaser.Scene {
   private onPointerMove = (pointer: Phaser.Input.Pointer): void => {
     if (this.dockDragging) return;
     if (!this.placing || !this.pointerDown) return;
-    this.updateGhost(pointer.x, pointer.y);
+    const { x, y } = this.worldXY(pointer);
+    this.updateGhost(x, y);
   };
 
   private onPointerUp = (pointer: Phaser.Input.Pointer): void => {
@@ -449,6 +470,7 @@ export class GameScene extends Phaser.Scene {
       this.pointerDown = false;
       return;
     }
+    const { x, y } = this.worldXY(pointer);
     // Force-release BEFORE place side-effects
     this.pointerDown = false;
     this.placing = false;
@@ -459,14 +481,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // Lift to commit; drag-off / HUD cancel
-    if (!this.inPlayfield(pointer.x, pointer.y)) {
+    if (!this.inPlayfield(x, y)) {
       this.time.delayedCall(0, () => {
         audio.play('deny');
         this.emitHud();
       });
       return;
     }
-    const ok = this.tryPlace(pointer.x, pointer.y);
+    const ok = this.tryPlace(x, y);
     if (!ok) {
       this.time.delayedCall(0, () => {
         audio.play('deny');
@@ -696,6 +718,7 @@ export class GameScene extends Phaser.Scene {
       wallGold = w >= u.costWood && g >= u.costGold;
     }
     for (const seg of this.fort.segments.values()) {
+      if (seg.def.kind === 'gap') continue;
       if (wallGold) seg.setUpgradePip('gold');
       else if (wallMaxed) seg.setUpgradePip('silver');
       else seg.setUpgradePip('none');
@@ -798,7 +821,7 @@ export class GameScene extends Phaser.Scene {
       this.cancelPlace();
     }
     const seg = this.fort.segments.get(dir);
-    if (!seg) {
+    if (!seg || seg.def.kind === 'gap') {
       this.game.events.emit('keepward-toast', 'Missed the wall');
       return;
     }
@@ -924,7 +947,7 @@ export class GameScene extends Phaser.Scene {
 
   restart(): void {
     this.scene.stop('UI');
-    this.scene.start('Game', { layout: this.layoutId });
+    this.scene.start('Game', { survey: this.survey });
   }
 
   goMenu(): void {

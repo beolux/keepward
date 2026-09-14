@@ -1,15 +1,14 @@
 import Phaser from 'phaser';
 import {
-  generateFort,
   pointInCourtyard,
   pointInRect,
-  WALL_ADJACENT,
-  WALL_DIRS,
   type LayoutId,
   type WallDir,
   type FortLayout,
   type WallSegmentDef,
 } from '../data/fort';
+import type { SurveyedFort } from '../data/survey';
+import { SURVEY } from '../data/survey';
 import { WallSegment } from '../entities/Wall';
 import { TUNING } from '../data/tuning';
 import type { AgeId } from '../data/ages';
@@ -27,20 +26,29 @@ export class FortSystem {
   private groundGfx: Phaser.GameObjects.Graphics;
   private courtyardGfx: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene, layoutId: LayoutId) {
-    this.layoutId = layoutId;
-    const gen = generateFort(layoutId);
-    this.layout = gen.layout;
-    this.keepPos = gen.keep;
-    this.segmentDefs = gen.segments;
+  constructor(scene: Phaser.Scene, survey: SurveyedFort) {
+    this.layoutId = (survey.layout.id as LayoutId) || 'survey';
+    this.layout = survey.layout;
+    this.keepPos = survey.keep;
+    this.segmentDefs = survey.segments;
 
     this.groundGfx = scene.add.graphics().setDepth(0);
     this.courtyardGfx = scene.add.graphics().setDepth(1);
     this.drawGround(scene);
 
-    const baseHp = TUNING.wallHpByAge.dark;
-    for (const def of gen.segments) {
-      const seg = new WallSegment(scene, def, baseHp);
+    const baseHp = TUNING.wallHpByAge.dark ?? SURVEY.darkHp;
+    for (const def of survey.segments) {
+      const hp = def.kind === 'gap' ? 0 : baseHp;
+      const seg = new WallSegment(scene, def, hp);
+      if (def.kind === 'gap') {
+        seg.breached = true;
+        seg.hp = 0;
+        seg.gfx.setVisible(false);
+        seg.incomingGlow.setVisible(false);
+        seg.hpText.setVisible(false);
+        seg.hitZone.disableInteractive();
+        seg.hitZone.setActive(false).setVisible(false);
+      }
       this.segments.set(def.dir, seg);
     }
   }
@@ -121,6 +129,7 @@ export class FortSystem {
     const newBase = this.baselineForAge(next);
     const delta = newBase - oldBase;
     for (const seg of this.segments.values()) {
+      if (seg.def.kind === 'gap') continue;
       if (seg.breached || seg.rebuilding) continue;
       const wasFull = seg.hp >= seg.maxHp - 0.01;
       if (wasFull) {
@@ -138,7 +147,7 @@ export class FortSystem {
     this.hardened = true;
     const bonus = TUNING.wallUpgrades.hardenedTimbers.bonusHp;
     for (const seg of this.segments.values()) {
-      if (seg.breached) continue;
+      if (seg.def.kind === 'gap' || seg.breached) continue;
       seg.maxHp += bonus;
       seg.hp += bonus;
       seg.redraw(false);
@@ -152,7 +161,7 @@ export class FortSystem {
       ? TUNING.wallUpgrades.stoneFacing.stoneBaseline + TUNING.wallUpgrades.stoneFacing.hardenedBonus
       : TUNING.wallUpgrades.stoneFacing.stoneBaseline;
     for (const seg of this.segments.values()) {
-      if (seg.breached) continue;
+      if (seg.def.kind === 'gap' || seg.breached) continue;
       const gain = Math.max(0, target - seg.maxHp);
       seg.maxHp = Math.max(seg.maxHp, target);
       seg.hp += gain;
@@ -170,9 +179,10 @@ export class FortSystem {
     }
     if (splashAdj) {
       const splash = amount * TUNING.elephantSplashAdjacent;
-      for (const adj of WALL_ADJACENT[dir]) {
+      const adjIds = seg?.def.adjacent ?? [];
+      for (const adj of adjIds) {
         const a = this.segments.get(adj);
-        if (a && !a.breached && !a.rebuilding) {
+        if (a && !a.breached && !a.rebuilding && a.def.kind !== 'gap') {
           if (a.takeDamage(splash, now)) breached.push(adj);
           a.redraw(this.stoneFaced);
         }
@@ -186,7 +196,10 @@ export class FortSystem {
   }
 
   anyBreach(): boolean {
-    for (const s of this.segments.values()) if (s.breached) return true;
+    for (const s of this.segments.values()) {
+      if (s.def.kind === 'gap') continue;
+      if (s.breached) return true;
+    }
     return false;
   }
 
@@ -209,12 +222,29 @@ export class FortSystem {
   private hemisphereRR = 0;
 
   /** Non-breached walls facing a spawn edge (fallback: any intact, else N). */
+  private realWalls(): WallSegment[] {
+    return [...this.segments.values()].filter((s) => s.def.kind !== 'gap');
+  }
+
+  private gapWalls(edge?: 'N' | 'E' | 'S' | 'W'): WallSegment[] {
+    return [...this.segments.values()].filter(
+      (s) => s.def.kind === 'gap' && (!edge || s.def.faces.includes(edge) || s.def.hemisphere === edge),
+    );
+  }
+
   private hemisphereCandidates(edge: 'N' | 'E' | 'S' | 'W'): WallSegment[] {
-    let list = this.wallsForEdge(edge).filter((s) => !s.breached);
+    let list = this.wallsForEdge(edge).filter((s) => !s.breached && s.def.kind !== 'gap');
     if (list.length === 0) {
-      list = [...this.segments.values()].filter((s) => !s.breached);
+      list = this.realWalls().filter((s) => !s.breached);
     }
-    if (list.length === 0) return [this.segments.get('N')!];
+    if (list.length === 0) {
+      const gaps = this.gapWalls(edge);
+      if (gaps.length) return gaps;
+      const anyGap = this.gapWalls();
+      if (anyGap.length) return anyGap;
+      const any = this.realWalls();
+      if (any.length) return [any[0]];
+    }
     return list;
   }
 
@@ -228,7 +258,26 @@ export class FortSystem {
     attackPoint: { x: number; y: number };
     breachPoint: { x: number; y: number };
   } {
+    const gaps = this.gapWalls(edge);
+    const intact = this.wallsForEdge(edge).filter((s) => !s.breached && s.def.kind !== 'gap');
+    // Mix weakest walls with open gaps on this edge (edges → weakest / gaps / Keep)
+    if (gaps.length && (intact.length === 0 || Math.random() < 0.3)) {
+      const wall = gaps[Math.floor(Math.random() * gaps.length)];
+      return {
+        wall,
+        attackPoint: { ...wall.def.attackPoint },
+        breachPoint: { ...wall.def.breachPoint },
+      };
+    }
     const list = this.hemisphereCandidates(edge);
+    if (!list.length) {
+      const wall = this.realWalls()[0] ?? [...this.segments.values()][0];
+      return {
+        wall,
+        attackPoint: { ...wall.def.attackPoint },
+        breachPoint: { ...wall.def.breachPoint },
+      };
+    }
     list.sort((a, b) => a.hp - b.hp);
 
     // Inverse-HP weights, blended with uniform so weakest cannot monopolize.
@@ -266,14 +315,12 @@ export class FortSystem {
     const ap = seg.def.attackPoint;
     const r = seg.def.rect;
     const t = Math.random() - 0.5;
-    const dir = seg.dir;
-    if (dir === 'N' || dir === 'S') {
+    if (r.w >= r.h * 1.2) {
       return { x: ap.x + t * Math.max(r.w * 0.55, 24), y: ap.y };
     }
-    if (dir === 'E' || dir === 'W') {
+    if (r.h >= r.w * 1.2) {
       return { x: ap.x, y: ap.y + t * Math.max(r.h * 0.55, 24) };
     }
-    // Corners — small 2D jitter
     return {
       x: ap.x + t * 20,
       y: ap.y + (Math.random() - 0.5) * 20,
@@ -296,8 +343,9 @@ export class FortSystem {
   ): boolean {
     const inset = TUNING.placement.towerRadius;
     if (!pointInCourtyard(x, y, this.layout.courtyard, inset)) return false;
-    // not on wall segments
+    // not on wall segments (gaps are open dirt)
     for (const seg of this.segments.values()) {
+      if (seg.def.kind === 'gap') continue;
       if (pointInRect(x, y, expandRect(seg.def.rect, TUNING.placement.wallClearance))) return false;
     }
     const kd = Phaser.Math.Distance.Between(x, y, keepPos.x, keepPos.y);
@@ -310,12 +358,10 @@ export class FortSystem {
 
   /** Walls in hemisphere of a spawn edge (for incoming tell) */
   wallsForEdge(edge: 'N' | 'E' | 'S' | 'W'): WallSegment[] {
-    return WALL_DIRS.filter((d) => {
-      if (edge === 'N') return d === 'N' || d === 'NE' || d === 'NW';
-      if (edge === 'S') return d === 'S' || d === 'SE' || d === 'SW';
-      if (edge === 'E') return d === 'E' || d === 'NE' || d === 'SE';
-      return d === 'W' || d === 'NW' || d === 'SW';
-    }).map((d) => this.segments.get(d)!);
+    return [...this.segments.values()].filter((s) => {
+      if (s.def.kind === 'gap') return false;
+      return s.def.faces?.includes(edge) || s.def.hemisphere === edge;
+    });
   }
 
   /** Glow / clear incoming-side tell on wall segments */

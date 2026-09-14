@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { GAME_W, GAME_H, VIEW_DPR } from './data/map';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
+import { SurveyScene } from './scenes/SurveyScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// full1 — edge-to-edge viewport + DPR canvas; force SW bump
+// survey1 — survey fort + full1b dock-drag world coords; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {
@@ -38,7 +39,7 @@ const config: Phaser.Types.Core.GameConfig = {
   input: {
     activePointers: 2,
   },
-  scene: [BootScene, MenuScene, GameScene, UIScene],
+  scene: [BootScene, MenuScene, SurveyScene, GameScene, UIScene],
   // Locked camera — no zoom controls
   banner: false,
   fps: {

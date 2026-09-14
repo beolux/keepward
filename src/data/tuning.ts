@@ -1,6 +1,6 @@
 /**
  * Keepward fort-siege balance — `TUNING.md` documents Nick walls3 feel buff.
- * Wall HP (~+20% over walls2) + wall DPS pin + rebuild + Spear Post / Longbow locked.
+ * survey1: Dark palisade HP 160 on confirm (later ages unchanged). Survey is free.
  * bounty1 (CoS): 2× kill wood/gold. Passive, wave bonus, research costs unchanged.
  */
 
@@ -67,7 +67,7 @@ export const TUNING = {
 
   /** Wall HP baseline per segment by age (age-up applies rules in FortSystem). */
   wallHpByAge: {
-    dark: 190,
+    dark: 160,
     feudal: 340,
     castle: 620,
     imperial: 960,
