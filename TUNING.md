@@ -6,6 +6,9 @@
 
 **night2 juice:** combat numbers unchanged. Royale wood/gold HUD flash on discrete gains; drag-ghost lerp + clearer green/red; Keep sheet 4 stamp tiles (Age/Attack/Defense/Siege); PvZ teach waves 2–3 (one sentence each, skippable, once). No pan/zoom, Bombard, 4th aura, multi-gate, or IAP.
 
+**night3 juice:** combat numbers unchanged. CoC rebuild ceremony (rubble→hammer→pop) on wall rebuild + repair spark; survey polish (0.35-tile stroke magnet, Confirm reason when disabled, gate chevrons). No pan/zoom, Bombard, 4th aura, multi-gate, or IAP.
+
+
 Downstream files (`ages.ts`, `towers.ts`, `enemies.ts`, `waves.ts`, `FortSystem`) read from tuning.
 
 ## Nick / CoS override (early2)
@@ -26,7 +29,7 @@ Research costs made saving hard. **2× all kill wood and gold** so research + re
 ## Fort
 - **survey1b:** player-surveyed palisade (or Quick fort rect + 1-tile south gate)
 - Min 6 / max 12 wall pieces = straights + gate only (auto-corners free); exactly 1 gate after ≥5 straight tiles
-- Fat snap 1.0 tile; stroke-draw paints adjacent edge chain
+- Fat snap 1.0 tile; 0.35-tile stroke magnet (night3); stroke-draw paints adjacent edge chain
 - Survey is FREE. Dark palisade HP **160** on confirm. Repair after w1 still paid.
 - Free place anywhere inside courtyard (not walls/exterior/keep/towers)
 - Placement: towerRadius 13 · keepClearance 28

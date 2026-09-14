@@ -17,6 +17,10 @@ export const SURVEY = {
   ringTiles: 4,
   ringTilesMin: 3,
   ringTilesMax: 5,
+  /** Fat acquisition radius (survey1b) */
+  fatSnapTiles: 1.0,
+  /** Sticky magnet while stroking — prefer current axis within this (night3) */
+  magnetTiles: 0.35,
 } as const;
 
 export interface SurveyGrid {
@@ -91,6 +95,7 @@ export function snapWallEdge(
   grid: SurveyGrid,
   x: number,
   y: number,
+  prefer?: { axis: WallAxis; c: number; r: number } | null,
 ): { axis: WallAxis; c: number; r: number } | null {
   const t = grid.tile;
   const lx = x - grid.originX;
@@ -113,8 +118,24 @@ export function snapWallEdge(
       ? Infinity
       : Math.abs(lx - cV * t) + Math.max(0, Math.abs(ly - (rV + 0.5) * t) - t * 0.5);
 
+  // night3: 0.35-tile magnet — stick to preferred axis while stroke-drawing
+  const magnet = t * SURVEY.magnetTiles;
+  if (prefer) {
+    if (prefer.axis === 'H') {
+      const dist = Math.abs(ly - prefer.r * t);
+      if (dist <= magnet && cH >= 0 && cH < grid.cols && prefer.r >= 0 && prefer.r <= grid.rows) {
+        return { axis: 'H', c: cH, r: prefer.r };
+      }
+    } else {
+      const dist = Math.abs(lx - prefer.c * t);
+      if (dist <= magnet && rV >= 0 && rV < grid.rows && prefer.c >= 0 && prefer.c <= grid.cols) {
+        return { axis: 'V', c: prefer.c, r: rV };
+      }
+    }
+  }
+
   // Fat snap: nearest edge within 1.0 tile (survey1b — was 0.55, fat-finger miss)
-  const maxD = t * 1.0;
+  const maxD = t * SURVEY.fatSnapTiles;
   if (dH <= dV && dH <= maxD) return { axis: 'H', c: cH, r: rH };
   if (dV <= maxD) return { axis: 'V', c: cV, r: rV };
   return null;

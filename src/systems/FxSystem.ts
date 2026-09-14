@@ -8,6 +8,7 @@ const PARTICLE_CAP = 64;
  * Lightweight VFX: kill squash, gold-to-tower, flash, dust, shake.
  * Hard particle cap to keep mobile smooth.
  * night1: stronger kill pop, bounty float, age fanfare, wave-clear burst.
+ * night3: CoC rebuild rubble→hammer→pop; repair spark.
  */
 export class FxSystem {
   private scene: Phaser.Scene;
@@ -345,6 +346,183 @@ export class FxSystem {
           onComplete: () => t.destroy(),
         });
       },
+    });
+  }
+
+  /**
+   * CoC-style rebuild channel: rubble settle + swinging hammer + progress bar.
+   * Call stop() if the segment is destroyed mid-channel.
+   */
+  rebuildChannel(
+    x: number,
+    y: number,
+    durationMs: number,
+    onProgress?: (t: number) => void,
+  ): { stop: () => void } {
+    const scene = this.scene;
+    const hammer = scene.add.container(x, y - 18).setDepth(95);
+    const handle = scene.add.rectangle(0, 4, 4, 18, Palette.wood, 1).setOrigin(0.5, 0);
+    const head = scene.add.rectangle(0, 2, 14, 8, Palette.slate, 1).setOrigin(0.5, 1);
+    head.setStrokeStyle(1, Palette.stoneLight, 0.8);
+    hammer.add([handle, head]);
+    hammer.setRotation(-0.55);
+
+    const barW = 36;
+    const barBg = scene.add
+      .rectangle(x, y + 16, barW, 5, 0x000000, 0.7)
+      .setDepth(94);
+    const barFill = scene.add
+      .rectangle(x - barW / 2, y + 16, 2, 5, Palette.gold, 1)
+      .setOrigin(0, 0.5)
+      .setDepth(95);
+
+    // Soft rubble puffs at start
+    this.breachDust(x, y);
+
+    let stopped = false;
+    const swing = scene.tweens.add({
+      targets: hammer,
+      rotation: 0.65,
+      duration: 220,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      onYoyo: () => {
+        if (!stopped) {
+          // light tick via tiny dust
+          if (this.canSpawn(1)) {
+            const p = scene.add.circle(x + 6, y + 2, 2, Palette.ochreDark, 0.7).setDepth(93);
+            this.live++;
+            scene.tweens.add({
+              targets: p,
+              y: y + 10,
+              alpha: 0,
+              duration: 180,
+              onComplete: () => {
+                this.live = Math.max(0, this.live - 1);
+                p.destroy();
+              },
+            });
+          }
+        }
+      },
+    });
+
+    const start = scene.time.now;
+    const tick = scene.time.addEvent({
+      delay: 50,
+      loop: true,
+      callback: () => {
+        if (stopped) return;
+        const t = Math.min(1, (scene.time.now - start) / durationMs);
+        barFill.width = Math.max(2, barW * t);
+        onProgress?.(t);
+        if (t >= 1) {
+          stopped = true;
+          swing.stop();
+          tick.remove(false);
+          hammer.destroy(true);
+          barBg.destroy();
+          barFill.destroy();
+        }
+      },
+    });
+
+    const safety = scene.time.delayedCall(durationMs + 80, () => {
+      if (stopped) return;
+      stopped = true;
+      swing.stop();
+      tick.remove(false);
+      if (hammer.active) hammer.destroy(true);
+      if (barBg.active) barBg.destroy();
+      if (barFill.active) barFill.destroy();
+    });
+
+    return {
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        swing.stop();
+        tick.remove(false);
+        safety.remove(false);
+        if (hammer.active) hammer.destroy(true);
+        if (barBg.active) barBg.destroy();
+        if (barFill.active) barFill.destroy();
+      },
+    };
+  }
+
+  /** Wall pops back — CoC rebuild complete */
+  rebuildPop(x: number, y: number): void {
+    this.flash(Palette.gold, 0.18, 120);
+    this.shortShake(0.005, 90);
+    const ring = this.scene.add
+      .circle(x, y, 10, Palette.chalk, 0.7)
+      .setDepth(72)
+      .setScale(0.2);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 3.4,
+      alpha: 0,
+      duration: 320,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+    if (!this.canSpawn(6)) return;
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI * 2 * i) / 6;
+      const p = this.scene.add
+        .circle(x, y, 3, i % 2 ? Palette.wood : Palette.gold, 0.95)
+        .setDepth(73);
+      this.live++;
+      this.scene.tweens.add({
+        targets: p,
+        x: x + Math.cos(ang) * 26,
+        y: y + Math.sin(ang) * 18 - 8,
+        alpha: 0,
+        scale: 0.25,
+        duration: 280,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.live = Math.max(0, this.live - 1);
+          p.destroy();
+        },
+      });
+    }
+  }
+
+  /** Quick hammer spark + heal pip on repair chunk */
+  repairSpark(x: number, y: number): void {
+    const hammer = this.scene.add.container(x + 8, y - 10).setDepth(95);
+    const handle = this.scene.add.rectangle(0, 2, 3, 12, Palette.wood, 1).setOrigin(0.5, 0);
+    const head = this.scene.add.rectangle(0, 1, 10, 6, Palette.slate, 1).setOrigin(0.5, 1);
+    hammer.add([handle, head]);
+    hammer.setRotation(-0.7);
+    this.scene.tweens.add({
+      targets: hammer,
+      rotation: 0.5,
+      duration: 90,
+      yoyo: true,
+      onComplete: () => hammer.destroy(true),
+    });
+    const pip = this.scene.add
+      .text(x, y - 8, '+', {
+        fontSize: '14px',
+        color: '#7EC850',
+        fontFamily: 'system-ui',
+        fontStyle: 'bold',
+        stroke: '#1A2A22',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(96);
+    this.scene.tweens.add({
+      targets: pip,
+      y: y - 28,
+      alpha: 0,
+      duration: 420,
+      ease: 'Quad.easeOut',
+      onComplete: () => pip.destroy(),
     });
   }
 

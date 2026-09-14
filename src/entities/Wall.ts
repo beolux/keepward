@@ -13,6 +13,8 @@ export class WallSegment {
   lastHitAt = 0;
   /** True while rebuild channel is running */
   rebuilding = false;
+  /** 0–1 channel progress while rebuilding (night3) */
+  rebuildProgress = 0;
   gfx: Phaser.GameObjects.Graphics;
   hpText: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
@@ -93,10 +95,15 @@ export class WallSegment {
     g.clear();
     const r = this.def.rect;
     if (this.rebuilding) {
-      g.fillStyle(Palette.wood, 0.55);
+      // Rising wall under rubble → hammer channel
+      const rise = Math.max(0.15, this.rebuildProgress);
+      g.fillStyle(Palette.breach, 0.45);
       g.fillRect(r.x, r.y, r.w, r.h);
+      g.fillStyle(Palette.wood, 0.85);
+      g.fillRect(r.x, r.y + r.h * (1 - rise), r.w, r.h * rise);
       g.lineStyle(3, Palette.gold, 0.95);
       g.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      this.drawRubble(g, r, 0.45 * (1 - rise));
       this.hpText.setText('BUILD…');
       this.hpText.setColor('#D4A84B');
       this.hpText.setAlpha(1);
@@ -105,8 +112,9 @@ export class WallSegment {
       return;
     }
     if (this.breached) {
-      g.fillStyle(Palette.breach, 0.85);
+      g.fillStyle(Palette.breach, 0.55);
       g.fillRect(r.x, r.y, r.w, r.h);
+      this.drawRubble(g, r, 1);
       g.lineStyle(1, Palette.dirtDark, 0.6);
       g.strokeRect(r.x, r.y, r.w, r.h);
       if (this.buildHint) {
@@ -145,6 +153,28 @@ export class WallSegment {
     this.hpText.setColor(pct < 0.35 ? '#E08080' : '#F0EBE0');
     this.drawHpBar();
     this.drawIncomingGlow();
+  }
+
+
+  /** CoC rubble piles on breached / mid-rebuild segments */
+  private drawRubble(
+    g: Phaser.GameObjects.Graphics,
+    r: { x: number; y: number; w: number; h: number },
+    amt: number,
+  ): void {
+    if (amt <= 0.02) return;
+    const n = Math.max(3, Math.floor(5 * amt));
+    for (let i = 0; i < n; i++) {
+      const seed = (i * 17 + Math.floor(r.x) + Math.floor(r.y) * 3) % 97;
+      const px = r.x + 2 + ((seed * 13) % Math.max(4, r.w - 8));
+      const py = r.y + 2 + ((seed * 7) % Math.max(3, r.h - 6));
+      const pw = 4 + (seed % 5);
+      const ph = 3 + (seed % 4);
+      g.fillStyle(seed % 2 === 0 ? Palette.dirtDark : Palette.ochreDark, 0.75 * amt);
+      g.fillRect(px, py, pw, ph);
+      g.fillStyle(Palette.breach, 0.5 * amt);
+      g.fillRect(px + 1, py + 1, Math.max(1, pw - 2), Math.max(1, ph - 2));
+    }
   }
 
   /** Dark/Feudal: vertical palisade logs — clearly wood */
@@ -397,12 +427,19 @@ export class WallSegment {
   beginRebuild(): void {
     if (!this.breached || this.rebuilding) return;
     this.rebuilding = true;
+    this.rebuildProgress = 0;
     this.redraw(this.stone);
+  }
+
+  setRebuildProgress(t: number): void {
+    this.rebuildProgress = Math.max(0, Math.min(1, t));
+    if (this.rebuilding) this.redraw(this.stone);
   }
 
   /** Restore full HP at current age baseline after rebuild channel */
   finishRebuild(maxHp: number, stone: boolean): void {
     this.rebuilding = false;
+    this.rebuildProgress = 0;
     this.breached = false;
     this.maxHp = maxHp;
     this.hp = maxHp;

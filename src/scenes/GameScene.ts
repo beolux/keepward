@@ -936,12 +936,20 @@ export class GameScene extends Phaser.Scene {
       this.emitHud();
       const stone =
         this.fort.stoneFaced || this.age === 'castle' || this.age === 'imperial';
+      const bx = seg.def.breachPoint.x;
+      const by = seg.def.breachPoint.y;
+      // night3 CoC: rubble → hammer channel → pop
+      const channel = this.fx.rebuildChannel(bx, by, TUNING.rebuild.placeMs, (t) => {
+        seg.setRebuildProgress(t);
+      });
       this.time.delayedCall(TUNING.rebuild.placeMs, () => {
+        channel.stop();
         if (!seg || !this.sys.settings.active) return;
         // Segment may have been destroyed on restart
         if (!this.fort.segments.has(dir)) return;
         const maxHp = this.fort.baselineForAge(this.age);
         seg.finishRebuild(maxHp, stone);
+        this.fx.rebuildPop(bx, by);
         this.game.events.emit('keepward-toast', 'Rebuilt wall');
         audio.play('upgrade');
         this.emitHud();
@@ -978,6 +986,7 @@ export class GameScene extends Phaser.Scene {
     this.wood -= result.wood;
     this.gold -= result.gold;
     const left = Math.ceil(seg.maxHp - seg.hp);
+    this.fx.repairSpark(seg.def.breachPoint.x, seg.def.breachPoint.y);
     this.game.events.emit(
       'keepward-toast',
       left > 0

@@ -222,7 +222,7 @@ export class SurveyScene extends Phaser.Scene {
       id === 'keep'
         ? 'Drag Keep onto dirt'
         : id === 'wall'
-          ? 'Stroke walls on the grid · fat snap · corners free'
+          ? 'Stroke walls · fat snap · 0.35 magnet · corners free'
           : 'Tap a straight wall to place the gate',
     );
   }
@@ -287,7 +287,7 @@ export class SurveyScene extends Phaser.Scene {
       }
       return;
     }
-    const edge = snapWallEdge(this.draft.grid, x, y);
+    const edge = snapWallEdge(this.draft.grid, x, y, this.painting ? this.lastEdge : null);
     if (!edge) return;
 
     if (this.tool === 'gate') {
@@ -358,7 +358,7 @@ export class SurveyScene extends Phaser.Scene {
       g.fillRoundedRect(px - 16, py - 22, 32, 36, 3);
       return;
     }
-    const edge = snapWallEdge(this.draft.grid, x, y);
+    const edge = snapWallEdge(this.draft.grid, x, y, this.painting ? this.lastEdge : null);
     // Always keep a ghost under the finger; snap preview when in range
     g.fillStyle(Palette.rangeOk, 0.12);
     g.fillCircle(x, y, 14);
@@ -407,6 +407,47 @@ export class SurveyScene extends Phaser.Scene {
     });
   }
 
+
+  /** Small chevrons on the gate pointing away from Keep */
+  private drawGateChevrons(
+    g: Phaser.GameObjects.Graphics,
+    r: { x: number; y: number; w: number; h: number },
+  ): void {
+    const keep = this.draft.keep;
+    if (!keep) return;
+    const kc = tileCenter(this.draft.grid, keep.c, keep.r);
+    const mx = r.x + r.w / 2;
+    const my = r.y + r.h / 2;
+    const dx = mx - kc.x;
+    const dy = my - kc.y;
+    const horizontal = r.w >= r.h;
+    g.lineStyle(2, Palette.gold, 0.85);
+    const steps = 3;
+    if (horizontal) {
+      const out = dy >= 0 ? 1 : -1; // south or north
+      for (let i = 0; i < steps; i++) {
+        const cy = my + out * (6 + i * 5);
+        const half = 5 + i;
+        g.beginPath();
+        g.moveTo(mx - half, cy - out * 3);
+        g.lineTo(mx, cy);
+        g.lineTo(mx + half, cy - out * 3);
+        g.strokePath();
+      }
+    } else {
+      const out = dx >= 0 ? 1 : -1; // east or west
+      for (let i = 0; i < steps; i++) {
+        const cx = mx + out * (6 + i * 5);
+        const half = 5 + i;
+        g.beginPath();
+        g.moveTo(cx - out * 3, my - half);
+        g.lineTo(cx, my);
+        g.lineTo(cx - out * 3, my + half);
+        g.strokePath();
+      }
+    }
+  }
+
   private redrawFort(): void {
     const g = this.wallGfx;
     g.clear();
@@ -421,6 +462,8 @@ export class SurveyScene extends Phaser.Scene {
         else g.fillRect(r.x - 1, r.y + r.h * 0.32, r.w + 2, r.h * 0.36);
         g.lineStyle(1, Palette.gold, 0.7);
         g.strokeRect(r.x, r.y, r.w, r.h);
+        // night3: outward gate chevrons (cheap entrance tell)
+        this.drawGateChevrons(g, r);
       } else if (p.kind === 'corner') {
         g.fillStyle(Palette.ochreDark, 1);
         g.fillRect(r.x, r.y, r.w, r.h);
@@ -525,6 +568,30 @@ export class SurveyScene extends Phaser.Scene {
       b.bg.setAlpha(alpha);
       b.label.setAlpha(alpha);
     }
-    if (!err) this.tipText.setText('Confirm locks the fort · then build towers');
+    // night3: always surface why Confirm is disabled
+    if (err) {
+      this.tipText.setText(err);
+      const confirm = this.bar.find((b) => b.id === 'confirm');
+      if (confirm) {
+        confirm.label.setText(shortConfirmReason(err));
+        confirm.label.setFontSize('9px');
+      }
+    } else {
+      this.tipText.setText('Confirm locks the fort · then build towers');
+      const confirm = this.bar.find((b) => b.id === 'confirm');
+      if (confirm) {
+        confirm.label.setText('Confirm');
+        confirm.label.setFontSize('10px');
+      }
+    }
   }
+}
+
+/** Compact Confirm-button copy when locked */
+function shortConfirmReason(err: string): string {
+  if (err.includes('Keep')) return 'Need Keep';
+  if (err.includes('gate') || err.includes('Gate')) return 'Need gate';
+  if (err.includes('Max')) return 'Too many';
+  if (err.includes('Need')) return 'Need walls';
+  return 'Not ready';
 }

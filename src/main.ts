@@ -7,7 +7,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// night2 — Royale HUD flash, ghost polish, Keep stamps, PvZ teach w2–3; force SW bump
+// night3 — CoC rebuild ceremony, survey magnet/confirm/gate chevrons; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {
