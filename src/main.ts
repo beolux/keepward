@@ -7,7 +7,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// survey1 — survey fort + full1b dock-drag world coords; force SW bump
+// survey1b — fat snap + stroke walls + corners free; keep dock-drag world coords; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

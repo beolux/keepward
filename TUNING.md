@@ -20,8 +20,9 @@ Research costs made saving hard. **2× all kill wood and gold** so research + re
 | Elephant | 80 | 80 |
 
 ## Fort
-- **survey1:** player-surveyed palisade (or Quick fort 8-seg rect + south gate)
-- Min 6 / max 12 wall pieces incl auto-corners; exactly 1 gate
+- **survey1b:** player-surveyed palisade (or Quick fort rect + 1-tile south gate)
+- Min 6 / max 12 wall pieces = straights + gate only (auto-corners free); exactly 1 gate after ≥5 straight tiles
+- Fat snap 1.0 tile; stroke-draw paints adjacent edge chain
 - Survey is FREE. Dark palisade HP **160** on confirm. Repair after w1 still paid.
 - Free place anywhere inside courtyard (not walls/exterior/keep/towers)
 - Placement: towerRadius 13 · keepClearance 28

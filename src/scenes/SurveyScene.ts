@@ -13,6 +13,7 @@ import {
   ringWorldRect,
   snapKeepTile,
   snapWallEdge,
+  strokeEdgeChain,
   tileCenter,
   type SurveyTool,
   type SurveyedFort,
@@ -141,7 +142,7 @@ export class SurveyScene extends Phaser.Scene {
     const g = this.gridGfx;
     g.clear();
     const grid = this.draft.grid;
-    g.lineStyle(1, Palette.ochreDark, 0.18);
+    g.lineStyle(1, Palette.ochreDark, 0.42);
     for (let c = 0; c <= grid.cols; c++) {
       const x = grid.originX + c * grid.tile;
       g.lineBetween(x, grid.originY, x, grid.originY + grid.rows * grid.tile);
@@ -212,7 +213,7 @@ export class SurveyScene extends Phaser.Scene {
     }
     if (id === 'gate' && !this.draft.canPlaceGate) {
       audio.play('deny');
-      this.tipText.setText('Gate after 5 walls · exactly one');
+      this.tipText.setText('Gate after 5 straights · exactly one');
       return;
     }
     this.tool = id;
@@ -221,7 +222,7 @@ export class SurveyScene extends Phaser.Scene {
       id === 'keep'
         ? 'Drag Keep onto dirt'
         : id === 'wall'
-          ? 'Drag walls on the grid · corners auto at 90°'
+          ? 'Stroke walls on the grid · fat snap · corners free'
           : 'Tap a straight wall to place the gate',
     );
   }
@@ -288,24 +289,54 @@ export class SurveyScene extends Phaser.Scene {
     }
     const edge = snapWallEdge(this.draft.grid, x, y);
     if (!edge) return;
-    if (
-      this.lastEdge &&
-      this.lastEdge.axis === edge.axis &&
-      this.lastEdge.c === edge.c &&
-      this.lastEdge.r === edge.r
-    ) {
+
+    if (this.tool === 'gate') {
+      if (
+        this.lastEdge &&
+        this.lastEdge.axis === edge.axis &&
+        this.lastEdge.c === edge.c &&
+        this.lastEdge.r === edge.r
+      ) {
+        return;
+      }
+      this.lastEdge = edge;
+      const ok = this.draft.placeGate(edge.axis, edge.c, edge.r);
+      if (ok) {
+        audio.play('place');
+        this.redrawFort();
+        this.tool = 'wall';
+      } else if (first) {
+        audio.play('deny');
+      }
       return;
     }
-    this.lastEdge = edge;
-    const ok =
-      this.tool === 'gate'
-        ? this.draft.placeGate(edge.axis, edge.c, edge.r)
-        : this.draft.placeWall(edge.axis, edge.c, edge.r);
-    if (ok) {
+
+    // Wall stroke-draw: chain of adjacent edge tiles under the finger
+    const chain = strokeEdgeChain(this.lastEdge, edge);
+    if (chain.length === 0) return;
+    let placed = 0;
+    let denied = false;
+    for (const e of chain) {
+      if (this.draft.isOccupied(e.axis, e.c, e.r)) {
+        this.lastEdge = e;
+        continue;
+      }
+      if (this.draft.pieceCount >= SURVEY.maxPieces && !this.canMerge(e)) {
+        denied = true;
+        break;
+      }
+      if (this.draft.placeWall(e.axis, e.c, e.r)) {
+        placed++;
+        this.lastEdge = e;
+      } else {
+        denied = true;
+        break;
+      }
+    }
+    if (placed > 0) {
       audio.play('place');
       this.redrawFort();
-      if (this.tool === 'gate') this.tool = 'wall';
-    } else if (first) {
+    } else if (denied && first) {
       audio.play('deny');
     }
   }
@@ -328,23 +359,23 @@ export class SurveyScene extends Phaser.Scene {
       return;
     }
     const edge = snapWallEdge(this.draft.grid, x, y);
+    // Always keep a ghost under the finger; snap preview when in range
+    g.fillStyle(Palette.rangeOk, 0.12);
+    g.fillCircle(x, y, 14);
     if (!edge) {
-      g.lineStyle(2, Palette.rangeBad, 0.7);
+      g.lineStyle(2, Palette.chalk, 0.55);
       g.strokeCircle(x, y, 10);
       return;
     }
     const grid = this.draft.grid;
     const th = SURVEY.wallThickness;
-    const occupied = this.draft.pieces.some((p) => {
-      if (p.kind === 'corner') return false;
-      if (p.axis !== edge.axis) return false;
-      if (edge.axis === 'H') return p.a === edge.r && edge.c >= p.b && edge.c < p.b + p.len;
-      return p.a === edge.c && edge.r >= p.b && edge.r < p.b + p.len;
-    });
+    const occupied = this.draft.isOccupied(edge.axis, edge.c, edge.r);
+    const atMax = this.draft.pieceCount >= SURVEY.maxPieces && !this.canMerge(edge);
     const valid =
       this.tool === 'wall'
-        ? !occupied && (this.draft.pieceCount < SURVEY.maxPieces || this.canMerge(edge))
+        ? !occupied && !atMax
         : this.draft.canPlaceGate && (!occupied || this.isStraightAt(edge));
+    // Deny color only on true overlap / max (not snap miss)
     const color = valid ? Palette.rangeOk : Palette.rangeBad;
     g.fillStyle(color, 0.45);
     if (edge.axis === 'H') {

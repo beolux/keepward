@@ -113,10 +113,37 @@ export function snapWallEdge(
       ? Infinity
       : Math.abs(lx - cV * t) + Math.max(0, Math.abs(ly - (rV + 0.5) * t) - t * 0.5);
 
-  const maxD = t * 0.55;
+  // Fat snap: nearest edge within 1.0 tile (survey1b — was 0.55, fat-finger miss)
+  const maxD = t * 1.0;
   if (dH <= dV && dH <= maxD) return { axis: 'H', c: cH, r: rH };
   if (dV <= maxD) return { axis: 'V', c: cV, r: rV };
   return null;
+}
+
+/** Fill collinear adjacent edge tiles between two snaps (stroke-draw). */
+export function strokeEdgeChain(
+  from: { axis: WallAxis; c: number; r: number } | null,
+  to: { axis: WallAxis; c: number; r: number },
+): { axis: WallAxis; c: number; r: number }[] {
+  if (!from) return [to];
+  if (from.axis === to.axis && from.c === to.c && from.r === to.r) return [];
+  if (from.axis === 'H' && to.axis === 'H' && from.r === to.r && from.c !== to.c) {
+    const out: { axis: WallAxis; c: number; r: number }[] = [];
+    const step = to.c > from.c ? 1 : -1;
+    for (let c = from.c + step; step > 0 ? c <= to.c : c >= to.c; c += step) {
+      out.push({ axis: 'H', c, r: to.r });
+    }
+    return out;
+  }
+  if (from.axis === 'V' && to.axis === 'V' && from.c === to.c && from.r !== to.r) {
+    const out: { axis: WallAxis; c: number; r: number }[] = [];
+    const step = to.r > from.r ? 1 : -1;
+    for (let r = from.r + step; step > 0 ? r <= to.r : r >= to.r; r += step) {
+      out.push({ axis: 'V', c: to.c, r });
+    }
+    return out;
+  }
+  return [to];
 }
 
 /** Inclusive vertices of the suggested courtyard ring around a keep cell. */
@@ -210,22 +237,32 @@ export class SurveyDraft {
     this.grid = grid ?? surveyGrid();
   }
 
+  /** Straights + gate only — auto-corners do not count toward min/max (survey1b). */
   get pieceCount(): number {
-    return this.pieces.length;
+    return this.pieces.filter((p) => p.kind !== 'corner').length;
+  }
+
+  get straightCount(): number {
+    return this.pieces.filter((p) => p.kind === 'straight').length;
   }
 
   get gateCount(): number {
     return this.pieces.filter((p) => p.kind === 'gate').length;
   }
 
+  /** Edge tiles in straight runs (gate unlock; merge-friendly). */
+  get straightTiles(): number {
+    return this.pieces.filter((p) => p.kind === 'straight').reduce((n, p) => n + p.len, 0);
+  }
+
   get canPlaceGate(): boolean {
-    return this.pieces.length >= SURVEY.minWallsForGate && this.gateCount === 0;
+    return this.straightTiles >= SURVEY.minWallsForGate && this.gateCount === 0;
   }
 
   confirmError(): string | null {
     if (!this.keep) return 'Place the Keep';
-    if (this.pieces.length < SURVEY.minPieces) return `Need ${SURVEY.minPieces}–${SURVEY.maxPieces} walls`;
-    if (this.pieces.length > SURVEY.maxPieces) return `Max ${SURVEY.maxPieces} wall pieces`;
+    if (this.pieceCount < SURVEY.minPieces) return `Need ${SURVEY.minPieces}–${SURVEY.maxPieces} walls`;
+    if (this.pieceCount > SURVEY.maxPieces) return `Max ${SURVEY.maxPieces} wall pieces`;
     if (this.gateCount !== 1) return 'Need exactly 1 gate';
     return null;
   }
@@ -270,6 +307,10 @@ export class SurveyDraft {
     return this.pieces.find((p) => occupiesEdge(p, axis, c, r));
   }
 
+  isOccupied(axis: WallAxis, c: number, r: number): boolean {
+    return !!this.occupied(axis, c, r);
+  }
+
   private cornerAt(c: number, r: number): SurveyPiece | undefined {
     return this.pieces.find((p) => p.kind === 'corner' && p.a === c && p.b === r);
   }
@@ -308,7 +349,7 @@ export class SurveyDraft {
     const snap: Snapshot = { keep: this.keep ? { ...this.keep } : null, pieces: clonePieces(this.pieces) };
     this.mergeOrAdd(axis, c, r, 'straight');
     this.autoCorners();
-    if (this.pieces.length > SURVEY.maxPieces) {
+    if (this.pieceCount > SURVEY.maxPieces) {
       this.restore(snap);
       return false;
     }
@@ -319,18 +360,24 @@ export class SurveyDraft {
 
   placeGate(axis: WallAxis, c: number, r: number): boolean {
     if (this.gateCount >= 1) return false;
-    if (this.pieces.length < SURVEY.minWallsForGate) return false;
+    if (this.straightTiles < SURVEY.minWallsForGate) return false;
     const existing = this.occupied(axis, c, r);
     if (existing && existing.kind === 'corner') return false;
     if (existing && existing.kind === 'gate') return false;
     const snap: Snapshot = { keep: this.keep ? { ...this.keep } : null, pieces: clonePieces(this.pieces) };
     if (existing && existing.kind === 'straight') {
-      existing.kind = 'gate';
+      // Exactly 1 gate tile — split a long straight into left + gate + right
+      this.splitInGate(existing, axis, c, r);
+      this.autoCorners();
+      if (this.pieceCount > SURVEY.maxPieces) {
+        this.restore(snap);
+        return false;
+      }
     } else if (!existing) {
-      if (this.pieces.length >= SURVEY.maxPieces) return false;
+      if (this.pieceCount >= SURVEY.maxPieces) return false;
       this.mergeOrAdd(axis, c, r, 'gate');
       this.autoCorners();
-      if (this.pieces.length > SURVEY.maxPieces) {
+      if (this.pieceCount > SURVEY.maxPieces) {
         this.restore(snap);
         return false;
       }
@@ -340,6 +387,44 @@ export class SurveyDraft {
     this.stack.push(snap);
     if (this.stack.length > 40) this.stack.shift();
     return true;
+  }
+
+
+  private splitInGate(existing: SurveyPiece, axis: WallAxis, c: number, r: number): void {
+    const start = existing.b;
+    const len = existing.len;
+    const local = axis === 'H' ? c - start : r - start;
+    const a = existing.a;
+    this.pieces = this.pieces.filter((p) => p !== existing);
+    if (local > 0) {
+      this.pieces.push({
+        id: nextId(this.pieces),
+        kind: 'straight',
+        axis,
+        a,
+        b: start,
+        len: local,
+      });
+    }
+    this.pieces.push({
+      id: nextId(this.pieces),
+      kind: 'gate',
+      axis,
+      a,
+      b: start + local,
+      len: 1,
+    });
+    const rightLen = len - local - 1;
+    if (rightLen > 0) {
+      this.pieces.push({
+        id: nextId(this.pieces),
+        kind: 'straight',
+        axis,
+        a,
+        b: start + local + 1,
+        len: rightLen,
+      });
+    }
   }
 
   private mergeOrAdd(axis: WallAxis, c: number, r: number, kind: 'straight' | 'gate'): void {

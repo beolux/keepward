@@ -1,6 +1,6 @@
 /**
  * Keepward fort-siege balance — `TUNING.md` documents Nick walls3 feel buff.
- * survey1: Dark palisade HP 160 on confirm (later ages unchanged). Survey is free.
+ * survey1b: Dark palisade HP 160; survey stroke/snap UX. Survey is free.
  * bounty1 (CoS): 2× kill wood/gold. Passive, wave bonus, research costs unchanged.
  */
 
