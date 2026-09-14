@@ -26,7 +26,8 @@ import { FxSystem } from '../systems/FxSystem';
 import { audio } from '../systems/AudioSystem';
 import { isCavalry, type EnemyId } from '../data/enemies';
 import type { WallDir } from '../data/fort';
-import { HUD_TOP, HUD_BOTTOM } from '../data/map';
+import { GAME_H, HUD_TOP, HUD_BOTTOM } from '../data/map';
+import { applyLockedView } from '../utils/view';
 
 const UNDO_MS = 6000;
 const TEACH_KEY = 'keepward-taught-v1';
@@ -195,6 +196,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.teachMsg = this.taught ? null : 'Drag tower into courtyard';
 
+    applyLockedView(this);
     this.cameras.main.setBackgroundColor(Palette.grassDark);
     this.fort = new FortSystem(this, this.layoutId);
     this.fx = new FxSystem(this);
@@ -319,7 +321,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private inPlayfield(x: number, y: number): boolean {
-    return y > HUD_TOP + 8 && y < this.scale.height - HUD_BOTTOM;
+    return y > HUD_TOP + 8 && y < GAME_H - HUD_BOTTOM;
   }
 
   /** Start drag-place from dock button (Clash Royale style) */

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Palette } from '../data/palette';
 import { ensureAtlas, preloadAtlas } from '../art/atlas';
+import { applyLockedView } from '../utils/view';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -15,6 +16,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    applyLockedView(this);
     this.cameras.main.setBackgroundColor(Palette.bg);
     ensureAtlas(this);
     this.scene.start('Menu');

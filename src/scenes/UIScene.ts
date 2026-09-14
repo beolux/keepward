@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H } from '../data/map';
+import { applyLockedView } from '../utils/view';
 import { Palette } from '../data/palette';
 import { AGE_GEM } from '../data/artBible';
 import { TOWERS, TRACK_LABELS, type TowerId, type UpgradeTrack } from '../data/towers';
@@ -54,6 +55,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    applyLockedView(this);
     // Safe-area friendly top band — pause/wave/gold stay top
     const topY = 22;
     this.add.rectangle(GAME_W / 2, topY + 6, GAME_W, 52, Palette.hudBg, 0.9).setDepth(100);

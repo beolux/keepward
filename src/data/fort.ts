@@ -18,30 +18,55 @@ export interface FortLayout {
   wallThickness: number;
 }
 
-/** Fort ~70% of play view; 3 seeded layouts */
+/** Fort fills most of the play view — not a postage stamp in the grass */
 const playH = GAME_H - HUD_TOP - HUD_BOTTOM;
 const cx = GAME_W / 2;
 const cy = HUD_TOP + playH / 2;
 
-/** Courtyards scaled ~√2 so interior placeable area ≈2× (still 8 segments). */
+/**
+ * Fit courtyard so (courtyard + walls) covers ~fill of the playfield.
+ * Thin grass ring outside the walls; locked camera (no pinch).
+ */
+function fitCourtyard(
+  aspectW: number,
+  aspectH: number,
+  wallThickness: number,
+  fill = 0.9,
+): Rect {
+  const grass = 10;
+  // Max outer fort box (walls included) inside playfield
+  const maxOuterW = Math.min(GAME_W - 2 * grass, GAME_W * fill + wallThickness);
+  const maxOuterH = Math.min(playH - 2 * grass, playH * fill + wallThickness);
+  const maxW = maxOuterW - 2 * wallThickness;
+  const maxH = maxOuterH - 2 * wallThickness;
+  const scale = Math.min(maxW / aspectW, maxH / aspectH);
+  const w = Math.round(aspectW * scale);
+  const h = Math.round(aspectH * scale);
+  return {
+    x: Math.round(cx - w / 2),
+    y: Math.round(cy - h / 2),
+    w,
+    h,
+  };
+}
+
 export const FORT_LAYOUTS: Record<LayoutId, FortLayout> = {
   square: {
     id: 'square',
     name: 'Square Keep',
-    courtyard: { x: cx - 155, y: cy - 184, w: 310, h: 368 },
+    courtyard: fitCourtyard(1, 1.45, 18, 0.94),
     wallThickness: 18,
   },
   wide: {
     id: 'wide',
     name: 'Wide Bailey',
-    // Cap width so walls stay on-canvas (390 - margins)
-    courtyard: { x: cx - 162, y: cy - 140, w: 324, h: 280 },
+    courtyard: fitCourtyard(1.28, 1.05, 16, 0.94),
     wallThickness: 16,
   },
   tall: {
     id: 'tall',
     name: 'Tall Ward',
-    courtyard: { x: cx - 127, y: cy - 226, w: 254, h: 452 },
+    courtyard: fitCourtyard(1, 1.85, 18, 0.94),
     wallThickness: 18,
   },
 };

@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H } from './data/map';
+import { GAME_W, GAME_H, VIEW_DPR } from './data/map';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// bounty1 — 2× kill wood/gold (CoS pin); force SW bump
+// full1 — edge-to-edge viewport + DPR canvas; force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {
@@ -21,12 +21,19 @@ registerSW({
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-container',
-  width: GAME_W,
-  height: GAME_H,
+  // Buffer at device pixels (cap 3); zoom keeps CSS at logical size for ENVELOP
+  width: Math.round(GAME_W * VIEW_DPR),
+  height: Math.round(GAME_H * VIEW_DPR),
   backgroundColor: '#1A2A22',
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.ENVELOP,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    autoRound: true,
+    zoom: 1 / VIEW_DPR,
+  },
+  render: {
+    antialias: true,
+    roundPixels: true,
   },
   input: {
     activePointers: 2,

@@ -5,6 +5,7 @@ import { LAYOUT_ORDER, FORT_LAYOUTS, type LayoutId } from '../data/fort';
 import { audio } from '../systems/AudioSystem';
 import { FRAME_ORIGIN } from '../data/artBible';
 import { hasFrame } from '../art/atlas';
+import { applyLockedView } from '../utils/view';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -12,7 +13,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { width, height } = this.scale;
+    applyLockedView(this);
+    const width = GAME_W;
+    const height = GAME_H;
     this.cameras.main.setBackgroundColor(Palette.bg);
 
     const g = this.add.graphics();
@@ -81,9 +84,6 @@ export class MenuScene extends Phaser.Scene {
 
     // Unlock audio on any menu interaction
     this.input.once('pointerdown', () => audio.unlock());
-
-    void GAME_W;
-    void GAME_H;
   }
 
   private makeLayoutBtn(id: LayoutId, x: number, y: number): void {
