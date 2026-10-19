@@ -19,6 +19,7 @@ import {
 } from '../data/keepResearch';
 import { SPAWN_EDGES, edgeSpawnPoints, type LayoutId } from '../data/fort';
 import { makeQuickFort, type SurveyedFort } from '../data/survey';
+import { SURVEY_V2 } from '../data/version';
 import { TowerUnit, PlacementGhost } from '../entities/Tower';
 import { EnemyUnit } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
@@ -1048,6 +1049,11 @@ export class GameScene extends Phaser.Scene {
 
   restart(): void {
     this.scene.stop('UI');
+    // survey2: a new run starts with a fresh Survey
+    if (SURVEY_V2) {
+      this.scene.start('Survey');
+      return;
+    }
     this.scene.start('Game', { survey: this.survey });
   }
 

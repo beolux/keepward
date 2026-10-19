@@ -7,7 +7,7 @@ import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { registerSW } from 'virtual:pwa-register';
 
-// night3 — CoC rebuild ceremony, survey magnet/confirm/gate chevrons; force SW bump
+// survey2 — Survey v1 brief behind ?v=survey2 (night3 unchanged otherwise); force SW bump
 registerSW({
   immediate: true,
   onNeedRefresh() {

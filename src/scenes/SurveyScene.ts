@@ -15,9 +15,15 @@ import {
   snapWallEdge,
   strokeEdgeChain,
   tileCenter,
+  centralZone,
+  clampToZone,
   type SurveyTool,
   type SurveyedFort,
 } from '../data/survey';
+import { SURVEY_V2 } from '../data/version';
+
+/** survey2: the one thin teaching line (Chief brief). */
+const TEACH_V2 = 'Place your Keep, a Gate, and 6+ walls, then tap Ready';
 
 type BarId = SurveyTool | 'undo' | 'reset' | 'confirm';
 
@@ -26,6 +32,12 @@ export class SurveyScene extends Phaser.Scene {
   private tool: SurveyTool = 'keep';
   private painting = false;
   private lastEdge: { axis: 'H' | 'V'; c: number; r: number } | null = null;
+  /** survey2 tap-to-remove: piece / Keep under the finger at pointerdown */
+  private pendingRemove: string | null = null;
+  private pendingKeepRemove = false;
+  private downPt = { x: 0, y: 0 };
+  private keepTouched = false;
+  private flashUntil = 0;
 
   private ground!: Phaser.GameObjects.Graphics;
   private gridGfx!: Phaser.GameObjects.Graphics;
@@ -63,6 +75,13 @@ export class SurveyScene extends Phaser.Scene {
     this.tool = 'keep';
     this.painting = false;
     this.lastEdge = null;
+    this.pendingRemove = null;
+    this.pendingKeepRemove = false;
+    this.keepTouched = false;
+    this.flashUntil = 0;
+    this.bar = [];
+    this.keepImg = undefined;
+    this.keepGfx = undefined;
 
     this.ground = this.add.graphics().setDepth(0);
     this.drawField();
@@ -93,7 +112,7 @@ export class SurveyScene extends Phaser.Scene {
 
     this.buildBar();
     this.tipText = this.add
-      .text(GAME_W / 2, GAME_H - 128, 'Drag Keep onto dirt · walls snap to grid', {
+      .text(GAME_W / 2, GAME_H - 128, SURVEY_V2 ? TEACH_V2 : 'Drag Keep onto dirt · walls snap to grid', {
         fontFamily: 'system-ui',
         fontSize: '11px',
         color: '#A0A090',
@@ -159,8 +178,8 @@ export class SurveyScene extends Phaser.Scene {
       { id: 'wall', label: 'Wall' },
       { id: 'gate', label: 'Gate' },
       { id: 'undo', label: 'Undo' },
-      { id: 'reset', label: 'Reset' },
-      { id: 'confirm', label: 'Confirm' },
+      { id: 'reset', label: SURVEY_V2 ? 'Clear' : 'Reset' },
+      { id: 'confirm', label: SURVEY_V2 ? 'Ready' : 'Confirm' },
     ];
     const trayY = GAME_H - 64;
     this.add.rectangle(GAME_W / 2, trayY + 20, GAME_W, 108, Palette.hudBg, 0.95).setDepth(100);
@@ -211,6 +230,24 @@ export class SurveyScene extends Phaser.Scene {
       this.tryConfirm();
       return;
     }
+    if (SURVEY_V2) {
+      if (id === 'gate' && !this.draft.canPlaceGate) {
+        audio.play('deny');
+        this.flash('One Gate · tap it to remove');
+        return;
+      }
+      this.tool = id;
+      this.drawRing();
+      this.refreshBar();
+      this.flash(
+        id === 'keep'
+          ? 'Keep goes in the middle zone'
+          : id === 'wall'
+            ? 'Drag to draw walls · tap a wall to remove'
+            : 'Tap an edge 2+ tiles from the Keep',
+      );
+      return;
+    }
     if (id === 'gate' && !this.draft.canPlaceGate) {
       audio.play('deny');
       this.tipText.setText('Gate after 5 straights · exactly one');
@@ -231,7 +268,8 @@ export class SurveyScene extends Phaser.Scene {
     const err = this.draft.confirmError();
     if (err) {
       audio.play('deny');
-      this.tipText.setText(err);
+      if (SURVEY_V2) this.flash(err);
+      else this.tipText.setText(err);
       return;
     }
     let layout: SurveyedFort;
@@ -259,18 +297,84 @@ export class SurveyScene extends Phaser.Scene {
     if (!this.inPlay(x, y)) return;
     this.painting = true;
     this.lastEdge = null;
+    this.pendingRemove = null;
+    this.pendingKeepRemove = false;
+    this.keepTouched = false;
+    this.downPt = { x, y };
+    if (SURVEY_V2 && this.armTapRemove(x, y)) return;
     this.applyAt(x, y, true);
   };
+
+  /** survey2: if the finger lands on a placed piece, a tap (no drag) removes it. */
+  private armTapRemove(x: number, y: number): boolean {
+    const grid = this.draft.grid;
+    const k = this.draft.keep;
+    if (k) {
+      const kc = tileCenter(grid, k.c, k.r);
+      const t = snapKeepTile(grid, x, y);
+      const onKeep =
+        this.tool === 'keep'
+          ? !!t && t.c === k.c && t.r === k.r
+          : Math.hypot(x - kc.x, y - kc.y) < grid.tile * 0.3;
+      if (onKeep) {
+        this.pendingKeepRemove = true;
+        return true;
+      }
+    }
+    if (this.tool === 'keep') return false;
+    const edge = snapWallEdge(grid, x, y, null);
+    if (!edge) return false;
+    const p = this.draft.pieceAt(edge.axis, edge.c, edge.r);
+    if (!p) return false;
+    // Gate tool on a straight = place the gate there (split), not remove
+    if (this.tool === 'gate' && p.kind !== 'gate') return false;
+    this.pendingRemove = p.id;
+    this.lastEdge = edge;
+    return true;
+  }
+
+  private flash(msg: string): void {
+    this.tipText.setText(msg);
+    this.flashUntil = this.time.now + 1800;
+    this.time.delayedCall(1850, () => this.refreshBar());
+  }
 
   private onMove = (ptr: Phaser.Input.Pointer): void => {
     const { x, y } = this.world(ptr);
     this.drawGhost(x, y);
     if (!this.painting) return;
     if (!this.inPlay(x, y)) return;
+    if (SURVEY_V2 && (this.pendingRemove || this.pendingKeepRemove)) {
+      // Became a drag: cancel the tap-remove and treat as move / stroke
+      if (Math.hypot(x - this.downPt.x, y - this.downPt.y) < this.draft.grid.tile * 0.5) return;
+      this.pendingRemove = null;
+      this.pendingKeepRemove = false;
+    }
     this.applyAt(x, y, false);
   };
 
   private onUp = (): void => {
+    if (SURVEY_V2 && this.painting) {
+      if (this.pendingRemove) {
+        if (this.draft.removePiece(this.pendingRemove)) {
+          audio.play('sell');
+          this.redrawFort();
+        }
+      } else if (this.pendingKeepRemove) {
+        if (this.draft.removeKeep()) {
+          audio.play('sell');
+          this.redrawFort();
+        }
+      } else if (this.tool === 'keep' && this.keepTouched && this.draft.keep) {
+        // Keep down → straight to walls (no dead end for small fingers)
+        this.tool = 'wall';
+        this.drawRing();
+        this.flash('Now drag walls around your Keep');
+      }
+    }
+    this.pendingRemove = null;
+    this.pendingKeepRemove = false;
+    this.keepTouched = false;
     this.painting = false;
     this.lastEdge = null;
     this.ghostGfx.clear();
@@ -283,7 +387,11 @@ export class SurveyScene extends Phaser.Scene {
       if (!snap) return;
       if (this.draft.placeKeep(snap.c, snap.r)) {
         if (first) audio.play('place');
+        this.keepTouched = true;
         this.redrawFort();
+      } else if (SURVEY_V2 && first) {
+        audio.play('deny');
+        this.flash('Keep 2+ tiles from the Gate');
       }
       return;
     }
@@ -307,6 +415,7 @@ export class SurveyScene extends Phaser.Scene {
         this.tool = 'wall';
       } else if (first) {
         audio.play('deny');
+        if (SURVEY_V2) this.flash(this.gateDenyReason(edge));
       }
       return;
     }
@@ -321,7 +430,7 @@ export class SurveyScene extends Phaser.Scene {
         this.lastEdge = e;
         continue;
       }
-      if (this.draft.pieceCount >= SURVEY.maxPieces && !this.canMerge(e)) {
+      if (!SURVEY_V2 && this.draft.pieceCount >= SURVEY.maxPieces && !this.canMerge(e)) {
         denied = true;
         break;
       }
@@ -339,6 +448,13 @@ export class SurveyScene extends Phaser.Scene {
     } else if (denied && first) {
       audio.play('deny');
     }
+    if (SURVEY_V2 && denied) this.flash(`Max ${SURVEY.maxWalls} walls · tap one to remove`);
+  }
+
+  private gateDenyReason(edge: { axis: 'H' | 'V'; c: number; r: number }): string {
+    if (this.draft.gateCount >= 1) return 'One Gate · tap it to remove';
+    if (!this.draft.gateGapOk(edge.axis, edge.c, edge.r)) return 'Gate 2+ tiles from the Keep';
+    return `Max ${SURVEY.maxWalls} walls`;
   }
 
   private drawGhost(x: number, y: number): void {
@@ -346,8 +462,19 @@ export class SurveyScene extends Phaser.Scene {
     g.clear();
     if (!this.inPlay(x, y)) return;
     if (this.tool === 'keep') {
-      const snap = snapKeepTile(this.draft.grid, x, y);
-      const valid = !!snap;
+      let snap = snapKeepTile(this.draft.grid, x, y);
+      let valid = !!snap;
+      if (SURVEY_V2 && snap) {
+        const z = clampToZone(this.draft.grid, snap.c, snap.r);
+        const p = tileCenter(this.draft.grid, z.c, z.r);
+        snap = { c: z.c, r: z.r, x: p.x, y: p.y };
+        const gate = this.draft.gatePiece();
+        if (gate) {
+          const gx = gate.axis === 'H' ? gate.b : gate.a;
+          const gy = gate.axis === 'H' ? gate.a : gate.b;
+          valid = this.draft.gateGapOk(gate.axis, gx, gy, z);
+        }
+      }
       const px = snap?.x ?? x;
       const py = snap?.y ?? y;
       g.fillStyle(valid ? Palette.rangeOk : Palette.rangeBad, 0.22);
@@ -370,11 +497,15 @@ export class SurveyScene extends Phaser.Scene {
     const grid = this.draft.grid;
     const th = SURVEY.wallThickness;
     const occupied = this.draft.isOccupied(edge.axis, edge.c, edge.r);
-    const atMax = this.draft.pieceCount >= SURVEY.maxPieces && !this.canMerge(edge);
+    const atMax = SURVEY_V2
+      ? this.draft.wallCount >= SURVEY.maxWalls && !this.canMerge(edge)
+      : this.draft.pieceCount >= SURVEY.maxPieces && !this.canMerge(edge);
     const valid =
       this.tool === 'wall'
         ? !occupied && !atMax
-        : this.draft.canPlaceGate && (!occupied || this.isStraightAt(edge));
+        : this.draft.canPlaceGate &&
+          (!occupied || this.isStraightAt(edge)) &&
+          (!SURVEY_V2 || this.draft.gateGapOk(edge.axis, edge.c, edge.r));
     // Deny color only on true overlap / max (not snap miss)
     const color = valid ? Palette.rangeOk : Palette.rangeBad;
     g.fillStyle(color, 0.45);
@@ -394,6 +525,7 @@ export class SurveyScene extends Phaser.Scene {
   private canMerge(edge: { axis: 'H' | 'V'; c: number; r: number }): boolean {
     return this.draft.pieces.some((p) => {
       if (p.kind !== 'straight' || p.axis !== edge.axis) return false;
+      if (SURVEY_V2 && p.len >= SURVEY.segMaxTiles) return false;
       if (edge.axis === 'H') return p.a === edge.r && (p.b + p.len === edge.c || p.b === edge.c + 1);
       return p.a === edge.c && (p.b + p.len === edge.r || p.b === edge.r + 1);
     });
@@ -482,6 +614,17 @@ export class SurveyScene extends Phaser.Scene {
         }
         g.lineStyle(1, Palette.ochreDark, 0.85);
         g.strokeRect(r.x, r.y, r.w, r.h);
+        if (SURVEY_V2) {
+          // survey2: end posts so each wall segment reads as one piece
+          g.fillStyle(Palette.dirtDark, 1);
+          if (r.w >= r.h) {
+            g.fillRect(r.x, r.y - 1, 4, r.h + 2);
+            g.fillRect(r.x + r.w - 4, r.y - 1, 4, r.h + 2);
+          } else {
+            g.fillRect(r.x - 1, r.y, r.w + 2, 4);
+            g.fillRect(r.x - 1, r.y + r.h - 4, r.w + 2, 4);
+          }
+        }
       }
       void th;
     }
@@ -505,6 +648,30 @@ export class SurveyScene extends Phaser.Scene {
     g.lineStyle(1, Palette.chalk, 0.18);
     const inset = grid.tile * 0.15;
     g.strokeRect(rr.x + inset, rr.y + inset, rr.w - inset * 2, rr.h - inset * 2);
+    if (!SURVEY_V2) return;
+    // survey2: Keep zone (middle half) — bright while placing the Keep
+    const z = centralZone(grid);
+    const zx = grid.originX + z.c0 * grid.tile;
+    const zy = grid.originY + z.r0 * grid.tile;
+    const zw = (z.c1 - z.c0 + 1) * grid.tile;
+    const zh = (z.r1 - z.r0 + 1) * grid.tile;
+    const hot = this.tool === 'keep';
+    g.fillStyle(Palette.chalk, hot ? 0.1 : 0.03);
+    g.fillRect(zx, zy, zw, zh);
+    g.lineStyle(hot ? 2 : 1, Palette.gold, hot ? 0.6 : 0.18);
+    g.strokeRect(zx, zy, zw, zh);
+    // Gate keep-out square around the Keep while placing the Gate
+    const k = this.draft.keep;
+    if (k && this.tool === 'gate') {
+      const gap = SURVEY.gateKeepGapTiles;
+      g.fillStyle(Palette.rangeBad, 0.1);
+      g.fillRect(
+        grid.originX + (k.c - gap) * grid.tile,
+        grid.originY + (k.r - gap) * grid.tile,
+        (1 + gap * 2) * grid.tile,
+        (1 + gap * 2) * grid.tile,
+      );
+    }
   }
 
   private drawKeep(): void {
@@ -538,6 +705,10 @@ export class SurveyScene extends Phaser.Scene {
   }
 
   private refreshBar(): void {
+    if (SURVEY_V2) {
+      this.refreshBarV2();
+      return;
+    }
     const err = this.draft.confirmError();
     const n = this.draft.pieceCount;
     const gates = this.draft.gateCount;
@@ -585,6 +756,55 @@ export class SurveyScene extends Phaser.Scene {
       }
     }
   }
+
+  /** survey2 HUD: Walls n/6 counter, Ready lock reason, one teach line. */
+  private refreshBarV2(): void {
+    const err = this.draft.confirmError();
+    const n = this.draft.wallCount;
+    const walls = n < SURVEY.minWalls ? `Walls ${n}/${SURVEY.minWalls}` : `Walls ${n}/${SURVEY.maxWalls} ✓`;
+    this.statusText.setText(
+      `Keep ${this.draft.keep ? '✓' : '—'}  ·  ${walls}  ·  Gate ${this.draft.gateCount ? '✓' : '—'}`,
+    );
+    const any = this.draft.pieces.length > 0 || !!this.draft.keep;
+    for (const b of this.bar) {
+      const selected = b.id === this.tool;
+      let fill: number = Palette.hudPanel;
+      let alpha = 1;
+      let stroke: number = Palette.stone;
+      if (b.id === 'keep' || b.id === 'wall' || b.id === 'gate') {
+        fill = selected ? Palette.ochreDark : Palette.hudPanel;
+        stroke = selected ? Palette.ochre : Palette.stone;
+        if (b.id === 'gate' && this.draft.gateCount === 1) alpha = 0.4;
+      } else if (b.id === 'confirm') {
+        const ok = !err;
+        fill = ok ? Palette.ochre : Palette.slate;
+        stroke = ok ? Palette.gold : Palette.stone;
+        alpha = ok ? 1 : 0.55;
+        b.label.setColor(ok ? '#1A2A22' : '#F0EBE0');
+        b.label.setText(ok ? 'Ready' : shortReadyReason(err!));
+        b.label.setFontSize(ok ? '12px' : '9px');
+      } else if (b.id === 'undo' || b.id === 'reset') {
+        alpha = any ? 1 : 0.45;
+      }
+      b.bg.setFillStyle(fill);
+      b.bg.setStrokeStyle(2, stroke);
+      b.bg.setAlpha(alpha);
+      b.label.setAlpha(alpha);
+    }
+    if (this.time.now >= this.flashUntil) {
+      this.tipText.setText(err ? TEACH_V2 : 'Fort ready · tap Ready to defend');
+    }
+  }
+}
+
+/** Compact Ready-button copy when locked (survey2) */
+function shortReadyReason(err: string): string {
+  if (err.includes('Keep') && err.startsWith('Place')) return 'Need Keep';
+  if (err.includes('Gate 2+')) return 'Gate close';
+  if (err.includes('Gate')) return 'Need Gate';
+  if (err.startsWith('Walls')) return err;
+  if (err.includes('Max')) return 'Too many';
+  return 'Not ready';
 }
 
 /** Compact Confirm-button copy when locked */

@@ -6,6 +6,7 @@ import { audio } from '../systems/AudioSystem';
 import { FRAME_ORIGIN } from '../data/artBible';
 import { hasFrame } from '../art/atlas';
 import { applyLockedView } from '../utils/view';
+import { SURVEY_V2 } from '../data/version';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -73,10 +74,13 @@ export class MenuScene extends Phaser.Scene {
       audio.unlock();
       this.scene.start('Survey');
     });
-    this.makeStartBtn(width / 2, height * 0.58 + 62, 'Quick fort', false, () => {
-      audio.unlock();
-      this.scene.start('Game', { survey: makeQuickFort() });
-    });
+    // survey2: every run starts in the Survey — no Quick fort skip
+    if (!SURVEY_V2) {
+      this.makeStartBtn(width / 2, height * 0.58 + 62, 'Quick fort', false, () => {
+        audio.unlock();
+        this.scene.start('Game', { survey: makeQuickFort() });
+      });
+    }
 
     this.add
       .text(width / 2, height * 0.92, 'Portrait · Drag-to-place · PWA', {

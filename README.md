@@ -6,6 +6,8 @@ Medieval fort-siege tower defense — hold the keep. Portrait mobile-first PWA.
 
 Hard-refresh / open with `?v=night3` if a prior build left a stuck service worker.
 
+**Survey v1 (pending approval):** https://beolux.github.io/keepward/?v=survey2 — every run starts in the Survey (1 Keep in the middle zone, 1 Gate 2+ tiles away, 6–12 wall segments, tap to remove, Clear, Ready). Without `?v=survey2` the game plays as night3.
+
 ## Stack
 
 - Phaser 3 + TypeScript + Vite

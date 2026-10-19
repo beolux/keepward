@@ -1,6 +1,7 @@
 import { GAME_W, GAME_H, HUD_TOP, HUD_BOTTOM } from './map';
 import { TILE_PX } from './tuning';
 import type { FortLayout, Rect, WallDir, WallSegmentDef } from './fort';
+import { SURVEY_V2 } from './version';
 
 export type SurveyTool = 'keep' | 'wall' | 'gate';
 export type WallAxis = 'H' | 'V';
@@ -21,7 +22,54 @@ export const SURVEY = {
   fatSnapTiles: 1.0,
   /** Sticky magnet while stroking — prefer current axis within this (night3) */
   magnetTiles: 0.35,
+  /** survey2: walls are segments of up to N edge tiles (long strokes split) */
+  segMaxTiles: 4,
+  /** survey2: wall segments (Gate excluded) */
+  minWalls: 6,
+  maxWalls: 12,
+  /** survey2: clear tiles required between Keep and Gate */
+  gateKeepGapTiles: 2,
+  /** survey2: suggested ring (7×7 ≈ 8 segments) */
+  ringTilesV2: 3,
 } as const;
+
+/** survey2: middle half of the survey grid in each dimension (tile-center test). */
+export function centralZone(grid: SurveyGrid): { c0: number; r0: number; c1: number; r1: number } {
+  let c0 = Math.ceil(grid.cols / 4 - 0.5);
+  let c1 = Math.floor((grid.cols * 3) / 4 - 0.5);
+  let r0 = Math.ceil(grid.rows / 4 - 0.5);
+  let r1 = Math.floor((grid.rows * 3) / 4 - 0.5);
+  // Fallback: center pad if the grid is too small for a real zone
+  if (c1 < c0) c0 = c1 = Math.floor(grid.cols / 2);
+  if (r1 < r0) r0 = r1 = Math.floor(grid.rows / 2);
+  return { c0, r0, c1, r1 };
+}
+
+export function inCentralZone(grid: SurveyGrid, c: number, r: number): boolean {
+  const z = centralZone(grid);
+  return c >= z.c0 && c <= z.c1 && r >= z.r0 && r <= z.r1;
+}
+
+export function clampToZone(grid: SurveyGrid, c: number, r: number): { c: number; r: number } {
+  const z = centralZone(grid);
+  return { c: Math.max(z.c0, Math.min(z.c1, c)), r: Math.max(z.r0, Math.min(z.r1, r)) };
+}
+
+/** First edge tile of a straight/gate piece as (axis, c, r). */
+export function pieceEdge(p: SurveyPiece): { axis: WallAxis; c: number; r: number } {
+  return p.axis === 'H' ? { axis: 'H', c: p.b, r: p.a } : { axis: 'V', c: p.a, r: p.b };
+}
+
+/** Clear tiles between the Keep tile and an edge tile (Chebyshev, rect-to-rect). */
+export function keepEdgeGap(keep: { c: number; r: number }, axis: WallAxis, c: number, r: number): number {
+  const ex0 = c;
+  const ex1 = axis === 'H' ? c + 1 : c;
+  const ey0 = r;
+  const ey1 = axis === 'H' ? r : r + 1;
+  const gx = Math.max(0, ex0 - (keep.c + 1), keep.c - ex1);
+  const gy = Math.max(0, ey0 - (keep.r + 1), keep.r - ey1);
+  return Math.max(gx, gy);
+}
 
 export interface SurveyGrid {
   cols: number;
@@ -172,7 +220,7 @@ export function suggestedRing(
   grid: SurveyGrid,
   keepC: number,
   keepR: number,
-  tilesOut = SURVEY.ringTiles,
+  tilesOut: number = SURVEY_V2 ? SURVEY.ringTilesV2 : SURVEY.ringTiles,
 ): { c0: number; r0: number; c1: number; r1: number } {
   const d = Math.max(SURVEY.ringTilesMin, Math.min(SURVEY.ringTilesMax, tilesOut));
   let c0 = keepC - d;
@@ -276,11 +324,39 @@ export class SurveyDraft {
     return this.pieces.filter((p) => p.kind === 'straight').reduce((n, p) => n + p.len, 0);
   }
 
+  /** survey2: wall segments = straight pieces; Gate never counts. */
+  get wallCount(): number {
+    return this.straightCount;
+  }
+
   get canPlaceGate(): boolean {
+    if (SURVEY_V2) return this.gateCount === 0;
     return this.straightTiles >= SURVEY.minWallsForGate && this.gateCount === 0;
   }
 
+  gatePiece(): SurveyPiece | undefined {
+    return this.pieces.find((p) => p.kind === 'gate');
+  }
+
+  /** survey2: is this edge far enough from the Keep for a Gate? */
+  gateGapOk(axis: WallAxis, c: number, r: number, keep = this.keep): boolean {
+    if (!keep) return true;
+    return keepEdgeGap(keep, axis, c, r) >= SURVEY.gateKeepGapTiles;
+  }
+
   confirmError(): string | null {
+    if (SURVEY_V2) {
+      if (!this.keep) return 'Place your Keep';
+      if (this.gateCount !== 1) return 'Place a Gate';
+      const n = this.wallCount;
+      if (n < SURVEY.minWalls) return `Walls ${n}/${SURVEY.minWalls}`;
+      if (n > SURVEY.maxWalls) return `Max ${SURVEY.maxWalls} walls`;
+      const e = pieceEdge(this.gatePiece()!);
+      if (!this.gateGapOk(e.axis, e.c, e.r)) {
+        return 'Gate 2+ tiles from Keep';
+      }
+      return null;
+    }
     if (!this.keep) return 'Place the Keep';
     if (this.pieceCount < SURVEY.minPieces) return `Need ${SURVEY.minPieces}–${SURVEY.maxPieces} walls`;
     if (this.pieceCount > SURVEY.maxPieces) return `Max ${SURVEY.maxPieces} wall pieces`;
@@ -303,7 +379,15 @@ export class SurveyDraft {
   }
 
   placeKeep(c: number, r: number): boolean {
-    const t = clampTile(this.grid, c, r);
+    let t = clampTile(this.grid, c, r);
+    if (SURVEY_V2) {
+      t = clampToZone(this.grid, t.c, t.r);
+      const g = this.gatePiece();
+      if (g) {
+        const e = pieceEdge(g);
+        if (!this.gateGapOk(e.axis, e.c, e.r, t)) return false;
+      }
+    }
     if (this.keep && this.keep.c === t.c && this.keep.r === t.r) return true;
     this.push();
     this.keep = t;
@@ -315,6 +399,33 @@ export class SurveyDraft {
     if (!s) return false;
     this.restore(s);
     return true;
+  }
+
+  /** survey2: tap-to-remove (free). Corners re-derive. */
+  removePiece(id: string): boolean {
+    const p = this.pieces.find((q) => q.id === id);
+    if (!p || p.kind === 'corner') return false;
+    this.push();
+    this.pieces = this.pieces.filter((q) => q !== p);
+    this.autoCorners();
+    return true;
+  }
+
+  removeKeep(): boolean {
+    if (!this.keep) return false;
+    this.push();
+    this.keep = null;
+    return true;
+  }
+
+  /** Straight or gate covering this edge tile. */
+  pieceAt(axis: WallAxis, c: number, r: number): SurveyPiece | undefined {
+    return this.pieces.find((p) => p.kind !== 'corner' && occupiesEdge(p, axis, c, r));
+  }
+
+  /** Over the wall/gate cap? (survey2 counts walls only; night3 counts straights+gate) */
+  overCap(): boolean {
+    return SURVEY_V2 ? this.wallCount > SURVEY.maxWalls : this.pieceCount > SURVEY.maxPieces;
   }
 
   reset(): void {
@@ -370,7 +481,7 @@ export class SurveyDraft {
     const snap: Snapshot = { keep: this.keep ? { ...this.keep } : null, pieces: clonePieces(this.pieces) };
     this.mergeOrAdd(axis, c, r, 'straight');
     this.autoCorners();
-    if (this.pieceCount > SURVEY.maxPieces) {
+    if (this.overCap()) {
       this.restore(snap);
       return false;
     }
@@ -381,7 +492,9 @@ export class SurveyDraft {
 
   placeGate(axis: WallAxis, c: number, r: number): boolean {
     if (this.gateCount >= 1) return false;
-    if (this.straightTiles < SURVEY.minWallsForGate) return false;
+    if (SURVEY_V2) {
+      if (!this.gateGapOk(axis, c, r)) return false;
+    } else if (this.straightTiles < SURVEY.minWallsForGate) return false;
     const existing = this.occupied(axis, c, r);
     if (existing && existing.kind === 'corner') return false;
     if (existing && existing.kind === 'gate') return false;
@@ -390,15 +503,15 @@ export class SurveyDraft {
       // Exactly 1 gate tile — split a long straight into left + gate + right
       this.splitInGate(existing, axis, c, r);
       this.autoCorners();
-      if (this.pieceCount > SURVEY.maxPieces) {
+      if (this.overCap()) {
         this.restore(snap);
         return false;
       }
     } else if (!existing) {
-      if (this.pieceCount >= SURVEY.maxPieces) return false;
+      if (!SURVEY_V2 && this.pieceCount >= SURVEY.maxPieces) return false;
       this.mergeOrAdd(axis, c, r, 'gate');
       this.autoCorners();
-      if (this.pieceCount > SURVEY.maxPieces) {
+      if (this.overCap()) {
         this.restore(snap);
         return false;
       }
@@ -449,6 +562,8 @@ export class SurveyDraft {
   }
 
   private mergeOrAdd(axis: WallAxis, c: number, r: number, kind: 'straight' | 'gate'): void {
+    // survey2: cap segment length so long strokes read as several wall segments
+    const cap = SURVEY_V2 ? SURVEY.segMaxTiles : Infinity;
     if (axis === 'H') {
       const left = this.pieces.find(
         (p) => p.kind !== 'corner' && p.axis === 'H' && p.a === r && p.b + p.len === c,
@@ -464,16 +579,16 @@ export class SurveyDraft {
         this.pieces.push({ id: nextId(this.pieces), kind, axis: 'H', a: r, b: c, len: 1 });
         return;
       }
-      if (left && right && left.kind === 'straight' && right.kind === 'straight') {
+      if (left && right && left.kind === 'straight' && right.kind === 'straight' && left.len + 1 + right.len <= cap) {
         left.len += 1 + right.len;
         this.pieces = this.pieces.filter((p) => p !== right);
         return;
       }
-      if (left && left.kind === 'straight') {
+      if (left && left.kind === 'straight' && left.len + 1 <= cap) {
         left.len += 1;
         return;
       }
-      if (right && right.kind === 'straight') {
+      if (right && right.kind === 'straight' && right.len + 1 <= cap) {
         right.b = c;
         right.len += 1;
         return;
@@ -491,16 +606,16 @@ export class SurveyDraft {
       this.pieces.push({ id: nextId(this.pieces), kind, axis: 'V', a: c, b: r, len: 1 });
       return;
     }
-    if (up && down && up.kind === 'straight' && down.kind === 'straight') {
+    if (up && down && up.kind === 'straight' && down.kind === 'straight' && up.len + 1 + down.len <= cap) {
       up.len += 1 + down.len;
       this.pieces = this.pieces.filter((p) => p !== down);
       return;
     }
-    if (up && up.kind === 'straight') {
+    if (up && up.kind === 'straight' && up.len + 1 <= cap) {
       up.len += 1;
       return;
     }
-    if (down && down.kind === 'straight') {
+    if (down && down.kind === 'straight' && down.len + 1 <= cap) {
       down.b = r;
       down.len += 1;
       return;
